@@ -1,0 +1,626 @@
+import streamlit as st
+import pandas as pd
+from datetime import datetime, date
+from dateutil.relativedelta import relativedelta
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from sqlalchemy import text
+
+# CONFIGURAÇÃO MANDATÓRIA: Primeira linha para ativar o modo tela cheia nativo
+st.set_page_config(page_title="Datalake Comercial Executivo", layout="wide")
+
+# ==========================================================
+# 🔐 1. ENGINE DE AUTENTICAÇÃO REAL COM PERSISTÊNCIA DE URL
+# ==========================================================
+if "autenticado" not in st.session_state: st.session_state["autenticado"] = False
+if "exigir_reset" not in st.session_state: st.session_state["exigir_reset"] = False
+if "usuario_atual" not in st.session_state: st.session_state["usuario_atual"] = ""
+if "expanded_items" not in st.session_state: st.session_state["expanded_items"] = set()
+if "df_key_counter" not in st.session_state: st.session_state["df_key_counter"] = 0
+
+# MOTOR DE AUTO-LOGIN: Lê o token seguro após um F5
+if not st.session_state["autenticado"] and "usr" in st.query_params:
+    email_salvo = st.query_params["usr"]
+    conn = st.connection("postgresql", type="sql")
+    check_df = conn.query("SELECT status FROM usuarios WHERE email = :email", params={"email": email_salvo}, ttl=0)
+    if not check_df.empty and check_df.iloc[0]['status'] == "Ativo":
+        st.session_state["autenticado"] = True
+        st.session_state["usuario_atual"] = email_salvo
+
+if not st.session_state["autenticado"]:
+    st.markdown("""
+        <style>
+        .stApp { background-color: #050810; font-family: 'Inter', sans-serif; }
+        div[data-testid="stHeader"], header[data-testid="stHeader"] { display: none !important; }
+        [data-testid="stSidebar"] { display: none !important; }
+        .stTextInput input {
+            background-color: #0E1320 !important; color: #F9FAFB !important;
+            border: 1px solid #1E293B !important; border-radius: 8px !important;
+            padding: 12px 16px !important; font-size: 0.95rem !important;
+        }
+        .stTextInput input:focus { border-color: #2563EB !important; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15) !important; }
+        .stTextInput label { color: #94A3B8 !important; font-size: 0.85rem !important; font-weight: 500 !important; }
+        .stCheckbox label p { color: #94A3B8 !important; font-size: 0.9rem !important; font-weight: 500; }
+        div.stButton > button {
+            background-color: #2563EB !important; color: #FFFFFF !important;
+            font-weight: 600 !important; font-size: 0.95rem !important;
+            border-radius: 8px !important; border: none !important; padding: 12px 0px !important;
+        }
+        div.stButton > button:hover { background-color: #1D4ED8 !important; }
+        .google-auth-card {
+            background-color: #0E1320; border: 1px solid #1E293B; border-radius: 16px;
+            padding: 40px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+            max-width: 420px; margin: 0 auto;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    
+    st.write("\n" * 3)
+    _, col_login_wrapper, _ = st.columns([1, 1.1, 1])
+    
+    with col_login_wrapper:
+        st.markdown('<div class="google-auth-card">', unsafe_allow_html=True)
+        conn = st.connection("postgresql", type="sql")
+        
+        if st.session_state["exigir_reset"]:
+            st.markdown("<h2 style='text-align: center; color: #F8FAFC; font-weight: 700; margin-bottom:4px;'>Definir nova senha</h2>", unsafe_allow_html=True)
+            nova_senha = st.text_input("Nova senha", type="password", key="new_pwd")
+            confirma_senha = st.text_input("Confirme a nova senha", type="password", key="conf_pwd")
+            
+            if st.button("Salvar e Acessar", use_container_width=True):
+                if not nova_senha or nova_senha == "Mudar123!":
+                    st.markdown("<p style='color:#EF4444; font-size:0.85rem; text-align:center;'>❌ Escolha uma senha diferente.</p>", unsafe_allow_html=True)
+                elif nova_senha == confirma_senha:
+                    with conn.session as session:
+                        session.execute(
+                            text("UPDATE usuarios SET senha = :senha, provisoria = :provisoria WHERE email = :email"), 
+                            {"senha": nova_senha, "provisoria": False, "email": st.session_state["usuario_atual"]}
+                        )
+                        session.commit()
+                    st.session_state["autenticado"] = True
+                    st.session_state["exigir_reset"] = False
+                    st.success("Senha alterada!")
+                    st.rerun()
+                else:
+                    st.markdown("<p style='color:#EF4444; font-size:0.85rem; text-align:center;'>❌ As senhas não coincidem.</p>", unsafe_allow_html=True)
+        else:
+            st.markdown("<h2 style='text-align: center; color: #F8FAFC; font-weight: 700; margin-bottom: 4px;'>Fazer login</h2>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; color: #94A3B8; font-size:0.95rem; margin-bottom: 30px;'>Prosseguir para o Datalake Executivo</p>", unsafe_allow_html=True)
+            
+            usuario_input = st.text_input("E-mail corporativo", placeholder="diretor@empresa.com")
+            senha_input = st.text_input("Digite sua senha", type="password", placeholder="••••••••")
+            
+            manter_conectado = st.checkbox("Manter-me conectado", value=True)
+            st.write("")
+            
+            if st.button("Próximo", use_container_width=True):
+                query = "SELECT senha, provisoria, status FROM usuarios WHERE email = :email"
+                user_df = conn.query(query, params={"email": usuario_input.strip()}, ttl=0)
+                
+                if not user_df.empty:
+                    if user_df.iloc[0]['status'] != "Ativo":
+                        st.markdown("<p style='color: #EF4444; font-size:0.85rem; text-align:center;'>🚫 Usuário revogado.</p>", unsafe_allow_html=True)
+                    elif senha_input == user_df.iloc[0]['senha']:
+                        st.session_state["usuario_atual"] = usuario_input.strip()
+                        if user_df.iloc[0]['provisoria']:
+                            st.session_state["exigir_reset"] = True
+                            st.rerun()
+                        else:
+                            st.session_state["autenticado"] = True
+                            if manter_conectado:
+                                st.query_params["usr"] = usuario_input.strip()
+                            st.rerun()
+                    else:
+                        st.markdown("<p style='color: #EF4444; font-size:0.85rem; text-align:center;'>❌ Senha incorreta.</p>", unsafe_allow_html=True)
+                else:
+                    st.markdown("<p style='color: #EF4444; font-size:0.85rem; text-align:center;'>❌ Usuário não localizado.</p>", unsafe_allow_html=True)
+                    
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
+
+# ==========================================================
+# 2. FOLHA DE ESTILO CORPORATIVA (SIDEBAR, KPIS E HEADERS)
+# ==========================================================
+st.markdown("""
+    <style>
+    /* Customização básica das fontes e margens do bloco principal */
+    .block-container { 
+        padding-top: 4.5rem !important; 
+        padding-bottom: 2rem !important; 
+        max-width: 98% !important;
+    }
+    
+    /* Configuração visual exclusiva dos cards de KPI superiores */
+    .kpi-card {
+        background: #0E1320; border: 1px solid #1E293B; border-radius: 14px; padding: 24px; position: relative; overflow: hidden;
+        transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    .kpi-card:hover { transform: translateY(-3px); border-color: #334155; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2); }
+    .kpi-card.blue-accent::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #2563EB, #60A5FA); }
+    .kpi-card.emerald-accent::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #059669, #34D399); }
+    .kpi-card.orange-accent::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #EA580C, #FB923C); }
+    .kpi-card.purple-accent::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #7C3AED, #A78BFA); }
+    
+    .kpi-title { color: #94A3B8; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
+    .kpi-value { color: #F8FAFC; font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+    .kpi-footer { display: flex; align-items: center; margin-top: 16px; font-size: 0.85rem; }
+    .badge-positive { background-color: rgba(16, 185, 129, 0.1); color: #10B981; padding: 4px 10px; border-radius: 6px; font-weight: 600; margin-right: 10px; }
+    .badge-negative { background-color: rgba(239, 68, 68, 0.1); color: #EF4444; padding: 4px 10px; border-radius: 6px; font-weight: 600; margin-right: 10px; }
+    .kpi-ly-text { color: #64748B; font-size: 0.8rem; font-weight: 500; }
+    
+    /* Títulos dos gráficos internos */
+    .chart-header { display: flex; align-items: center; margin-bottom: 10px !important; }
+    .chart-icon-box { background: #1E293B; padding: 8px; border-radius: 8px; margin-right: 12px; display:flex; align-items:center; justify-content:center;}
+    .chart-title-text { margin: 0; color: #F8FAFC; font-size: 1.05rem; font-weight: 600; letter-spacing: 0.01em;}
+    
+    /* Customização do Menu Lateral */
+    div[data-testid="stRadio"] div[role="radiogroup"] label {
+        background-color: transparent !important; color: #94A3B8 !important;
+        border-radius: 6px !important; padding: 8px 12px !important; margin-bottom: 3px !important; width: 100% !important; display: flex !important;
+    }
+    div[data-testid="stRadio"] div[role="radiogroup"] label:hover { background-color: rgba(255, 255, 255, 0.03) !important; color: #F8FAFC !important; }
+    div[data-testid="stRadio"] div[role="radiogroup"] label[data-checked="true"] { background-color: #1E3A8A !important; color: #3B82F6 !important; font-weight: 600 !important; }
+    div[role="radiogroup"] label span:first-child { display: none !important; }
+    
+    /* Permite transbordo controlado para garantir funcionamento perfeito da barra nativa do Streamlit */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        overflow: visible !important;
+    }
+    
+    /* Supressão de scrollbars redundantes em tabelas */
+    div[data-testid="stDataFrame"]::-webkit-scrollbar,
+    .stDataFrame > div::-webkit-scrollbar {
+        display: none !important;
+        width: 0px !important;
+        height: 0px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ==========================================================
+# TIMING & CURRENCY STRING CONTROLLERS
+# ==========================================================
+def formatar_moeda_br(valor):
+    if valor >= 1_000_000_000: return f"R$ {valor/1_000_000_000:.1f} Bi".replace('.', ',')
+    elif valor >= 1_000_000: return f"R$ {valor/1_000_000:.1f} Mi".replace('.', ',')
+    elif valor >= 1_000: return f"R$ {valor/1_000:.1f} Mil".replace('.', ',')
+    else: return f"R$ {valor:.0f}"
+
+def formatar_moeda_br_completo(valor):
+    return f"R$ {valor:,.2f}".replace(',', 'v').replace('.', ',').replace('v', '.')
+
+# ==========================================================
+# FABRICA DA MATRIZ DE DEZESSETE COLUNAS COM TOTAL BI NATIVO
+# ==========================================================
+def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=True):
+    total_faturamento_atual = df_at['Total'].sum()
+    cols_grupo = [coluna_grupo] if isinstance(coluna_grupo, str) else coluna_grupo
+    
+    if not df_at.empty:
+        agg_at = df_at.groupby(cols_grupo).agg(Vendas=('Total', 'sum'), Qtd_de_Itens=('Quantidade', 'sum'), Pedidos=('Total', 'size')).reset_index()
+    else:
+        agg_at = pd.DataFrame(columns=cols_grupo + ['Vendas', 'Qtd_de_Itens', 'Pedidos'])
+        
+    df_ly = df_ly_raw.copy()
+    if 'Mes_Ano' in cols_grupo and not df_ly.empty:
+        df_ly['Data_Shifted'] = df_ly['Data'].apply(lambda x: x + relativedelta(years=1))
+        df_ly['Mes_Ano'] = df_ly['Data_Shifted'].dt.strftime('%m/%Y')
+        
+    if not df_ly.empty:
+        agg_ly = df_ly.groupby(cols_grupo).agg(Vendas_LY=('Total', 'sum'), Itens_LY=('Quantidade', 'sum'), Pedidos_LY=('Total', 'size')).reset_index()
+    else:
+        agg_ly = pd.DataFrame(columns=cols_grupo + ['Vendas_LY', 'Itens_LY', 'Pedidos_LY'])
+        
+    df_merged = pd.merge(agg_at, agg_ly, on=cols_grupo, how='outer').fillna(0)
+    
+    df_merged['Diferença Vendas %'] = df_merged.apply(lambda r: ((r['Vendas'] / r['Vendas_LY']) - 1) * 100 if r['Vendas_LY'] > 0 else (100 if r['Vendas'] > 0 else 0), axis=1)
+    df_merged['% de Participação'] = df_merged.apply(lambda r: (r['Vendas'] / total_faturamento_atual) * 100 if total_faturamento_atual > 0 else 0, axis=1)
+    df_merged['Diferença Pedidos %'] = df_merged.apply(lambda r: ((r['Pedidos'] / r['Pedidos_LY']) - 1) * 100 if r['Pedidos_LY'] > 0 else (100 if r['Pedidos'] > 0 else 0), axis=1)
+    df_merged['Diferença Itens %'] = df_merged.apply(lambda r: ((r['Qtd_de_Itens'] / r['Itens_LY']) - 1) * 100 if r['Itens_LY'] > 0 else (100 if r['Qtd_de_Itens'] > 0 else 0), axis=1)
+    
+    df_merged['Ticket Medio'] = df_merged.apply(lambda r: r['Vendas'] / r['Pedidos'] if r['Pedidos'] > 0 else 0, axis=1)
+    df_merged['Ticket Medio LY'] = df_merged.apply(lambda r: r['Vendas_LY'] / r['Pedidos_LY'] if r['Pedidos_LY'] > 0 else 0, axis=1)
+    df_merged['Diferença Ticket %'] = df_merged.apply(lambda r: ((r['Ticket Medio'] / r['Ticket Medio LY']) - 1) * 100 if r['Ticket Medio LY'] > 0 else (100 if r['Ticket Medio'] > 0 else 0), axis=1)
+    
+    df_merged = df_merged.rename(columns={'Qtd_de_Itens': 'Qtd de Itens', 'Vendas_LY': 'Vendas LY', 'Itens_LY': 'Itens LY', 'Pedidos_LY': 'Pedidos LY'})
+    ordem_final = cols_grupo + ['Vendas', 'Vendas LY', 'Diferença Vendas %', '% de Participação', 'Pedidos', 'Pedidos LY', 'Diferença Pedidos %', 'Qtd de Itens', 'Itens LY', 'Diferença Itens %', 'Ticket Medio', 'Ticket Medio LY', 'Diferença Ticket %']
+    df_merged = df_merged[ordem_final]
+    
+    if incluir_total:
+        total_row = {cols_grupo[0]: "Total Geral"}
+        if len(cols_grupo) > 1:
+            for c in cols_grupo[1:]: total_row[c] = ""
+            
+        total_row['Vendas'] = df_at['Total'].sum()
+        total_row['Vendas LY'] = df_ly_raw['Total'].sum()
+        total_row['Diferença Vendas %'] = ((total_row['Vendas'] / total_row['Vendas LY']) - 1) * 100 if total_row['Vendas LY'] > 0 else (100 if total_row['Vendas'] > 0 else 0)
+        total_row['% de Participação'] = 100.0 if total_row['Vendas'] > 0 else 0
+        total_row['Pedidos'] = len(df_at)
+        total_row['Pedidos LY'] = len(df_ly_raw)
+        total_row['Diferença Pedidos %'] = ((total_row['Pedidos'] / total_row['Pedidos LY']) - 1) * 100 if total_row['Pedidos LY'] > 0 else (100 if total_row['Pedidos'] > 0 else 0)
+        total_row['Qtd de Itens'] = df_at['Quantidade'].sum()
+        total_row['Itens LY'] = df_ly_raw['Quantidade'].sum()
+        total_row['Diferença Itens %'] = ((total_row['Qtd de Itens'] / total_row['Itens LY']) - 1) * 100 if total_row['Itens LY'] > 0 else (100 if total_row['Qtd de Itens'] > 0 else 0)
+        
+        tm_at = total_row['Vendas'] / total_row['Pedidos'] if total_row['Pedidos'] > 0 else 0
+        tm_ly = total_row['Vendas LY'] / total_row['Pedidos LY'] if total_row['Pedidos LY'] > 0 else 0
+        total_row['Ticket Medio'] = tm_at
+        total_row['Ticket Medio LY'] = tm_ly
+        total_row['Diferença Ticket %'] = ((tm_at / tm_ly) - 1) * 100 if tm_ly > 0 else (100 if tm_at > 0 else 0)
+        
+        df_merged = pd.concat([df_merged, pd.DataFrame([total_row])], ignore_index=True)
+    return df_merged
+
+def obter_config_colunas_bi(df, label_principal="Dimensão"):
+    def max_safe(col): return float(df[col].max()) if col in df.columns and df[col].max() > 0 else 1.0
+    return {
+        df.columns[0]: st.column_config.TextColumn(label_principal, alignment="left"),
+        "Vendas": st.column_config.ProgressColumn("Vendas", format="R$ %,.2f", min_value=0, max_value=max_safe("Vendas"), color="blue"),
+        "Vendas LY": st.column_config.ProgressColumn("Vendas LY", format="R$ %,.2f", min_value=0, max_value=max_safe("Vendas LY"), color="orange"),
+        "Diferença Vendas %": st.column_config.NumberColumn("Diferença Vendas %", format="%,.2f%%"),
+        "% de Participação": st.column_config.ProgressColumn("% de Participação", format="%,.2f%%", min_value=0, max_value=100, color="blue"),
+        "Pedidos": st.column_config.ProgressColumn("Pedidos", format="%,.0f", min_value=0, max_value=max_safe("Pedidos"), color="blue"),
+        "Pedidos LY": st.column_config.ProgressColumn("Pedidos LY", format="%,.0f", min_value=0, max_value=max_safe("Pedidos LY"), color="orange"),
+        "Diferença Pedidos %": st.column_config.NumberColumn("Diferença Pedidos %", format="%,.2f%%"),
+        "Qtd de Itens": st.column_config.ProgressColumn("Qtd de Itens", format="%,.0f", min_value=0, max_value=max_safe("Qtd de Itens"), color="blue"),
+        "Itens LY": st.column_config.ProgressColumn("Itens LY", format="%,.0f", min_value=0, max_value=max_safe("Itens LY"), color="orange"),
+        "Diferença Itens %": st.column_config.NumberColumn("Diferença Itens %", format="%,.2f%%"),
+        "Ticket Medio": st.column_config.ProgressColumn("Ticket Medio", format="R$ %,.2f", min_value=0, max_value=max_safe("Ticket Medio"), color="blue"),
+        "Ticket Medio LY": st.column_config.ProgressColumn("Ticket Medio LY", format="R$ %,.2f", min_value=0, max_value=max_safe("Ticket Medio LY"), color="orange"),
+        "Diferença Ticket %": st.column_config.NumberColumn("Diferença Ticket %", format="%,.2f%%"),
+    }
+
+# ==========================================================
+# MOTOR DE CAPTAÇÃO DE DADOS OTIMIZADO (LINK + ABA BASE_VENDAS)
+# ==========================================================
+@st.cache_data(ttl=600)
+def carregar_dados_comerciais():
+    colunas_padrao = ['Data', 'Canal', 'Categoria', 'Subcategoria', 'Fabricante', 'Produto', 'Quantidade', 'Total']
+    df_vazio = pd.DataFrame(columns=colunas_padrao)
+    
+    url_csv = "https://docs.google.com/spreadsheets/d/e/2PACX-1vShrCwOpKkCJ9pKpQPVAgeiJ1p-auVIzOaXSIwYsXRuw_B8HYrLpq3Ph4TV96sxJw/pub?sheet=Base_Vendas&output=csv"
+    
+    try:
+        df = pd.read_csv(url_csv)
+        df.columns = df.columns.str.strip()
+        st.session_state['colunas_brutas'] = list(df.columns)
+        
+        mapeamento = {
+            'data': 'Data', 'mês': 'Data', 'mes': 'Data',
+            'cliente': 'Canal', 'canal': 'Canal', 'categoria': 'Categoria', 
+            'subcategoria': 'Subcategoria', 'fabricante': 'Fabricante', 
+            'descrição': 'Produto', 'produto': 'Produto', 'qtde': 'Quantidade', 
+            'quantidade': 'Quantidade', 'total': 'Total'
+        }
+        df.columns = [mapeamento.get(c.lower(), c) for c in df.columns]
+        
+        if 'Data' in df.columns:
+            df['Data'] = pd.to_datetime(df['Data'], errors='coerce', format='mixed', dayfirst=True)
+            df = df.dropna(subset=['Data']).copy()
+            
+        for col in ['Quantidade', 'Total']:
+            if col in df.columns:
+                df[col] = df[col].astype(str).replace('R\$', '', regex=True).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        for col in colunas_padrao:
+            if col not in df.columns: df[col] = pd.Series(dtype='object')
+        
+        st.session_state['ultima_atualizacao'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        return df
+    except Exception:
+        return df_vazio
+
+with st.spinner("🔄 Sincronizando datalake executivo..."):
+    df_base = carregar_dados_comerciais()
+
+# ==========================================================
+# BARRA LATERAL DE ROTEAMENTO
+# ==========================================================
+st.sidebar.markdown("<h2 style='font-size: 1.25rem; font-weight: 700; margin-bottom: 0px;'>Módulos de Análise</h2>", unsafe_allow_html=True)
+st.sidebar.markdown("<p style='color: #64748B; font-size: 0.8rem; margin-top: 0px;'>Executive Suite v4.0</p>", unsafe_allow_html=True)
+st.sidebar.write("")
+
+pagina_selecionada = st.sidebar.radio(
+    "",
+    ["🏠 Visão Geral", "📈 Vendas por Mês", "📊 LY", "🔄 Comparação de Períodos", "👥 Canal", "📦 Categoria", "🏭 Fabricante", "🛒 Produto", "📋 Tabela Dinâmica", "⚙️ Configurações"]
+)
+st.sidebar.divider()
+
+if 'ultima_atualizacao' in st.session_state:
+    st.sidebar.caption(f"📅 **Atualizado em:** {st.session_state['ultima_atualizacao']}")
+    st.sidebar.caption(f"📁 **Fonte:** google_sheets_sync")
+    st.sidebar.caption(f"👤 **User:** {st.session_state['usuario_atual']}")
+
+if st.sidebar.button("🔒 Sair do Painel", use_container_width=True):
+    st.session_state["autenticado"] = False
+    if "usr" in st.query_params: del st.query_params["usr"]
+    st.rerun()
+
+# ==========================================================
+# FILTRO EM LINHA ÚNICA NATIVA DENTRO DO CONTAINER
+# ==========================================================
+with st.container(border=True):
+    col_preset, col_per_ini, col_per_fim, col_can, col_cat, col_sub, col_fab, col_pro, col_btn = st.columns([1.5, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 0.8])
+
+    hoje = date.today()
+    primeiro_dia_mes = date(hoje.year, hoje.month, 1)
+    min_data_db = df_base['Data'].min().date() if not df_base.empty else date(2020, 1, 1)
+
+    with col_preset:
+        time_preset = st.selectbox("Período Rápido", options=["Customizado", "Este Mês (MTD)", "Ano Corrente (YTD)", "Últimos 30 Dias", "Todo o Histórico"], index=1)
+
+    if time_preset == "Este Mês (MTD)": data_inicial_calculada, data_final_calculada = primeiro_dia_mes, hoje
+    elif time_preset == "Ano Corrente (YTD)": data_inicial_calculada, data_final_calculada = date(hoje.year, 1, 1), hoje
+    elif time_preset == "Últimos 30 Dias": data_inicial_calculada, data_final_calculada = hoje - relativedelta(days=30), hoje
+    elif time_preset == "Todo o Histórico": data_inicial_calculada, data_final_calculada = min_data_db, hoje
+    else: data_inicial_calculada, data_final_calculada = primeiro_dia_mes, hoje
+
+    with col_per_ini: data_inicio = st.date_input("Data Inicial", value=data_inicial_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
+    with col_per_fim: data_fim = st.date_input("Data Final", value=data_final_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
+        
+    with col_can: canais = st.multiselect("Canal", options=df_base['Canal'].dropna().unique(), placeholder="Todos")
+    with col_cat: categorias = st.multiselect("Categoria", options=df_base['Categoria'].dropna().unique(), placeholder="Todas")
+    with col_sub: subcategorias = st.multiselect("Subcategoria", options=df_base['Subcategoria'].dropna().unique(), placeholder="Todas")
+    with col_fab: fabricantes = st.multiselect("Fabricante", options=df_base['Fabricante'].dropna().unique(), placeholder="Todos")
+    with col_pro: produtos = st.multiselect("Produto", options=df_base['Produto'].dropna().unique(), placeholder="Todos")
+    with col_btn:
+        st.write(""); st.write("")
+        if st.button("🔄 Limpar", use_container_width=True): st.rerun()
+
+inicio_ts, fim_ts = pd.to_datetime(data_inicio), pd.to_datetime(data_fim)
+df_filtrado_geral = df_base.copy()
+if canais: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Canal'].isin(canais)]
+if categorias: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Categoria'].isin(categorias)]
+if subcategorias: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Subcategoria'].isin(subcategorias)]
+if fabricantes: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Fabricante'].isin(fabricantes)]
+if produtos: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Produto'].isin(produtos)]
+
+df_atual = df_filtrado_geral[(df_filtrado_geral['Data'] >= inicio_ts) & (df_filtrado_geral['Data'] <= fim_ts)]
+df_ly = df_filtrado_geral[(df_filtrado_geral['Data'] >= (inicio_ts - relativedelta(years=1))) & (df_filtrado_geral['Data'] <= (fim_ts - relativedelta(years=1)))]
+
+dias_selecionados = (fim_ts - inicio_ts).days
+formato_data = '%d/%m' if dias_selecionados <= 60 else '%m/%Y'
+
+# Mapeamento e Agregações Compartilhadas
+fat_at, qtd_at = df_atual['Total'].sum(), df_atual['Quantidade'].sum()
+tk_at = fat_at / len(df_atual) if not df_atual.empty else 0
+cli_at = df_atual['Canal'].nunique()
+
+fat_ly, qtd_ly = df_ly['Total'].sum(), df_ly['Quantidade'].sum()
+tk_ly = fat_ly / len(df_ly) if not df_ly.empty else 0
+cli_ly = df_ly['Canal'].nunique()
+
+v_fat = ((fat_at / fat_ly) - 1) * 100 if fat_ly > 0 else 0
+v_qtd = ((qtd_at / qtd_ly) - 1) * 100 if qtd_ly > 0 else 0
+v_tk = ((tk_at / tk_ly) - 1) * 100 if tk_ly > 0 else 0
+v_cli = ((cli_at / cli_ly) - 1) * 100 if cli_ly > 0 else 0
+
+fat_at_str = formatar_moeda_br_completo(fat_at).split(',')[0]
+qtd_at_str = f"{qtd_at:,.0f}".replace(",", ".")
+tk_at_str = formatar_moeda_br_completo(tk_at)
+
+v_fat_str = f"{v_fat:+.1f}%".replace('.', ',')
+v_qtd_str = f"{v_qtd:+.1f}%".replace('.', ',')
+v_tk_str = f"{v_tk:+.1f}%".replace('.', ',')
+v_cli_str = f"{v_cli:+.1f}%".replace('.', ',')
+
+# ==========================================================
+# 🏠 ABA: VISÃO GERAL
+# ==========================================================
+if pagina_selecionada == "🏠 Visão Geral":
+    k1, k2, k3, k4 = st.columns(4)
+    with k1: st.markdown(f"<div class='kpi-card blue-accent'><div class='kpi-title'>Faturamento Global</div><div class='kpi-value'>{fat_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_fat >= 0 else 'badge-negative'}'>{v_fat_str}</span><span class='kpi-ly-text'>vs LY ({formatar_moeda_br(fat_ly)})</span></div></div>", unsafe_allow_html=True)
+    with k2: st.markdown(f"<div class='kpi-card emerald-accent'><div class='kpi-title'>Volume de Itens</div><div class='kpi-value'>{qtd_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_qtd >= 0 else 'badge-negative'}'>{v_qtd_str}</span><span class='kpi-ly-text'>vs LY ({f'{qtd_ly:,.0f}'.replace(',', '.')})</span></div></div>", unsafe_allow_html=True)
+    with k3: st.markdown(f"<div class='kpi-card orange-accent'><div class='kpi-title'>Ticket Médio</div><div class='kpi-value'>{tk_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_tk >= 0 else 'badge-negative'}'>{v_tk_str}</span><span class='kpi-ly-text'>vs LY ({formatar_moeda_br(tk_ly)})</span></div></div>", unsafe_allow_html=True)
+    with k4: st.markdown(f"<div class='kpi-card purple-accent'><div class='kpi-title'>Canais Ativos</div><div class='kpi-value'>{cli_at}</div><div class='kpi-footer'><span class='{'badge-positive' if v_cli >= 0 else 'badge-negative'}'>{v_cli_str}</span><span class='kpi-ly-text'>vs LY ({cli_ly})</span></div></div>", unsafe_allow_html=True)
+        
+    st.write("\n")
+    
+    with st.container(border=True):
+        titulo_grafico_tempo = "Faturamento Diário Comercial" if dias_selecionados <= 60 else "Performance Histórica Mensal"
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>{titulo_grafico_tempo} (Atual vs LY)</h4></div>", unsafe_allow_html=True)
+        
+        df_g_atual = pd.DataFrame(columns=['Eixo_X', 'Atual'])
+        if not df_atual.empty:
+            df_t_atual = df_atual.copy().sort_values('Data')
+            df_t_atual['Eixo_X'] = df_t_atual['Data'].dt.strftime(formato_data)
+            df_g_atual = df_t_atual.groupby('Eixo_X', sort=False)['Total'].sum().reset_index().rename(columns={'Total': 'Atual'})
+            
+        df_g_ly = pd.DataFrame(columns=['Eixo_X', 'LY'])
+        if not df_ly.empty:
+            df_t_ly = df_ly.copy()
+            df_t_ly['Data_Shifted'] = df_t_ly['Data'].apply(lambda x: x + relativedelta(years=1))
+            df_t_ly = df_t_ly.sort_values('Data_Shifted')
+            df_t_ly['Eixo_X'] = df_t_ly['Data_Shifted'].dt.strftime(formato_data)
+            df_g_ly = df_t_ly.groupby('Eixo_X', sort=False)['Total'].sum().reset_index().rename(columns={'Total': 'LY'})
+
+        if not df_g_atual.empty or not df_g_ly.empty:
+            df_graf_temp = pd.merge(df_g_atual, df_g_ly, on='Eixo_X', how='outer').fillna(0)
+            df_graf_temp['Var_Perc'] = df_graf_temp.apply(lambda r: ((r['Atual'] / r['LY']) - 1) * 100 if r['LY'] > 0 else (100 if r['Atual'] > 0 else 0), axis=1)
+            df_graf_temp['Texto_Atual'] = df_graf_temp['Atual'].apply(formatar_moeda_br)
+            df_graf_temp['Texto_LY'] = df_graf_temp['LY'].apply(formatar_moeda_br)
+            df_graf_temp['Texto_Var'] = df_graf_temp['Var_Perc'].apply(lambda x: f"{x:+.1f}%".replace('.', ','))
+            df_graf_temp['Hover_Atual'] = df_graf_temp['Atual'].apply(formatar_moeda_br_completo)
+            df_graf_temp['Hover_LY'] = df_graf_temp['LY'].apply(formatar_moeda_br_completo)
+            
+            lista_anotacoes = []
+            max_global_val = max(df_graf_temp['Atual'].max(), df_graf_temp['LY'].max())
+            
+            if dias_selecionados <= 60:
+                fig_mes = go.Figure()
+                fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['LY'], name='Ano Anterior (LY)', mode='lines+markers', line=dict(color='#F59E0B', width=2, shape='spline'), fill='tozeroy', fillcolor='rgba(245, 158, 11, 0.02)', marker=dict(color='#F59E0B', size=4), customdata=df_graf_temp['Hover_LY'], hovertemplate="<b>LY:</b> %{customdata}<extra></extra>"))
+                fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
+                
+                for i, row in df_graf_temp.iterrows():
+                    if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
+                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+            else:
+                fig_mes = make_subplots(specs=[[{"secondary_y": True}]])
+                x_indices = list(range(len(df_graf_temp)))
+                fig_mes.add_trace(go.Bar(x=x_indices, y=df_graf_temp['Atual'], name='Ano Atual', marker_color='#3B82F6', customdata=df_graf_temp['Hover_Atual'], hovertemplate="<b>Atual:</b> %{customdata}<extra></extra>"), secondary_y=False)
+                fig_mes.add_trace(go.Bar(x=x_indices, y=df_graf_temp['LY'], name='Ano Anterior (LY)', marker_color='#F59E0B', customdata=df_graf_temp['Hover_LY'], hovertemplate="<b>LY:</b> %{customdata}<extra></extra>"), secondary_y=False)
+                fig_mes.add_trace(go.Scatter(x=x_indices, y=df_graf_temp['Var_Perc'], name='Crescimento %', mode='lines+markers', line=dict(color='#64748B', width=2), marker=dict(size=5), customdata=df_graf_temp['Texto_Var'], hovertemplate="<b>Cresc:</b> %{customdata}<extra></extra>"), secondary_y=True)
+                
+                for i, row in df_graf_temp.iterrows():
+                    if row['LY'] > 0: lista_anotacoes.append(dict(x=i + 0.20, y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=6, xanchor='center', yanchor='bottom', font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=3))
+                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=i - 0.20, y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=6, xanchor='center', yanchor='bottom', font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=3))
+                    lista_anotacoes.append(dict(x=i, y=row['Var_Perc'], text=row['Texto_Var'], showarrow=False, yshift=16, xanchor='center', yanchor='bottom', font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#1E293B', borderpad=3.5, xref="x", yref="y2"))
+                
+                fig_mes.update_layout(xaxis=dict(title="", showgrid=False, tickmode='array', tickvals=x_indices, ticktext=df_graf_temp['Eixo_X']), yaxis=dict(range=[0, max_global_val * 1.30]))
+            
+            fig_mes.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), yaxis=dict(title="", showgrid=False, showticklabels=False), yaxis2=dict(title="", showgrid=False, showticklabels=False) if dias_selecionados > 60 else None, margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes, height=420)
+            st.plotly_chart(fig_mes, use_container_width=True, config={'displayModeBar': 'hover'})
+
+    col_bottom1, col_bottom2 = st.columns(2)
+    with col_bottom1:
+        with st.container(border=True):
+            st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📊</div><h4 class='chart-title-text'>Faturamento por Canal</h4></div>", unsafe_allow_html=True)
+            if not df_atual.empty and df_atual['Total'].sum() > 0:
+                df_graf_canal = df_atual.groupby('Canal')['Total'].sum().reset_index().sort_values(by='Total', ascending=True)
+                df_graf_canal['Texto_Total'] = df_graf_canal['Total'].apply(formatar_moeda_br)
+                fig_canal = px.bar(df_graf_canal, x='Total', y='Canal', orientation='h', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
+                for idx, row in df_graf_canal.iterrows():
+                    fig_canal.add_annotation(dict(x=row['Total'], y=row['Canal'], text=row['Texto_Total'], showarrow=False, xshift=8, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='middle', xanchor='left'))
+                fig_canal.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False, showticklabels=False), yaxis=dict(title="", showgrid=False), margin=dict(l=15, r=15, t=10, b=40), coloraxis_showscale=False, height=350, legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
+                st.plotly_chart(fig_canal, use_container_width=True, config={'displayModeBar': 'hover'})
+
+    with col_bottom2:
+        with st.container(border=True):
+            st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📦</div><h4 class='chart-title-text'>Vendas por Categoria</h4></div>", unsafe_allow_html=True)
+            if not df_atual.empty and df_atual['Total'].sum() > 0:
+                df_graf_cat = df_atual.groupby('Categoria')['Total'].sum().reset_index().sort_values(by='Total', ascending=False)
+                fig_cat = px.bar(df_graf_cat, x='Categoria', y='Total', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
+                for idx, row in df_graf_cat.iterrows():
+                    fig_cat.add_annotation(dict(x=row['Categoria'], y=row['Total'], text=formatar_moeda_br(row['Total']), showarrow=False, yshift=6, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='bottom', xanchor='center'))
+                fig_cat.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False), yaxis=dict(title="", showgrid=False, showticklabels=False, range=[0, df_graf_cat['Total'].max() * 1.25]), margin=dict(l=15, r=15, t=10, b=40), coloraxis_showscale=False, height=350, legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
+                st.plotly_chart(fig_cat, use_container_width=True, config={'displayModeBar': 'hover'})
+
+# ==========================================================
+# 📈 ABA: VENDAS POR MÊS
+# ==========================================================
+elif pagina_selecionada == "📈 Vendas por Mês":
+    with st.container(border=True):
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>Histórico Comercial Mensal Estruturado</h4></div>", unsafe_allow_html=True)
+        if not df_atual.empty and df_atual['Total'].sum() > 0:
+            df_mes_full = df_atual.copy()
+            df_mes_full['Mes_Ano'] = df_mes_full['Data'].dt.strftime('%m/%Y')
+            df_mes_full = df_mes_full.sort_values('Data')
+            df_graf_full = df_mes_full.groupby('Mes_Ano', sort=False)['Total'].sum().reset_index()
+            fig_vendas_full = px.bar(df_graf_full, x='Mes_Ano', y='Total', marker_color='#2563EB')
+            fig_vendas_full.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False), yaxis=dict(title="", showgrid=False, showticklabels=False), height=320, margin=dict(l=15, r=15, t=10, b=40), legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
+            st.plotly_chart(fig_vendas_full, use_container_width=True, config={'displayModeBar': 'hover'})
+            
+            df_matriz_mes = gerar_tabela_analitica_padrao(df_atual, df_ly, 'Mes_Ano', incluir_total=True)
+            st.dataframe(df_matriz_mes, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_mes, "Mês / Ano"))
+
+# ==========================================================
+# 📊 ABA: LY (ANO ANTERIOR)
+# ==========================================================
+elif pagina_selecionada == "📊 LY":
+    with st.container(border=True):
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📊</div><h4 class='chart-title-text'>Análise de Performance Base - Período Anterior (LY)</h4></div>", unsafe_allow_html=True)
+        if not df_ly.empty:
+            df_ly_chart = df_ly.groupby('Categoria').agg(Vendas=('Total','sum')).reset_index().sort_values(by='Vendas', ascending=False)
+            fig_ly = px.bar(df_ly_chart, x='Categoria', y='Vendas', color_discrete_sequence=['#F59E0B'])
+            fig_ly.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title=""), yaxis=dict(title="", showgrid=True, gridcolor='#1E293B'), height=300, margin=dict(l=15, r=15, t=10, b=40), legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
+            st.plotly_chart(fig_ly, use_container_width=True, config={'displayModeBar': 'hover'})
+            
+            df_matriz_ly = gerar_tabela_analitica_padrao(df_ly, df_ly, 'Categoria', incluir_total=True)
+            st.dataframe(df_matriz_ly[['Categoria', 'Vendas', 'Pedidos', 'Qtd de Itens']], use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_ly, "Categoria"))
+        else:
+            st.info("Nenhum histórico localizado no período homólogo do ano anterior (LY).")
+
+# ==========================================================
+# 🔄 ABA: COMPARAÇÃO DE PERÍODOS
+# ==========================================================
+elif pagina_selecionada == "🔄 Comparação de Períodos":
+    with st.container(border=True):
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>🔄</div><h4 class='chart-title-text'>Matriz Comparativa de Volume e Receita</h4></div>", unsafe_allow_html=True)
+        df_comp = pd.DataFrame({
+            'Métrica': ['Faturamento', 'Itens Vendidos', 'Ticket Médio'],
+            'Período Atual': [fat_at, qtd_at, tk_at],
+            'Ano Anterior (LY)': [fat_ly, qtd_ly, tk_ly],
+            'Variação %': [v_fat, v_qtd, v_tk]
+        })
+        st.dataframe(df_comp, use_container_width=True, hide_index=True, column_config={
+            "Período Atual": st.column_config.NumberColumn(format="R$ %,.2f" if "Faturamento" in df_comp['Métrica'].values else "%,.2f"),
+            "Ano Anterior (LY)": st.column_config.NumberColumn(format="R$ %,.2f" if "Faturamento" in df_comp['Métrica'].values else "%,.2f"),
+            "Variação %": st.column_config.NumberColumn(format="+.2f%%")
+        })
+
+# ==========================================================
+# ABAS DIMENSIONAIS DIRETAS
+# ==========================================================
+elif pagina_selecionada in ["👥 Canal", "📦 Categoria", "🏭 Fabricante", "🛒 Produto"]:
+    mapeamento_abas = {"👥 Canal": "Canal", "📦 Categoria": "Categoria", "🏭 Fabricante": "Fabricante", "🛒 Produto": "Produto"}
+    entidade_foco = mapeamento_abas[pagina_selecionada]
+    
+    with st.container(border=True):
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>🎯</div><h4 class='chart-title-text'>Visão Executiva de Performance por {entidade_foco}</h4></div>", unsafe_allow_html=True)
+        df_ranking = df_atual.groupby(entidade_foco)['Total'].sum().reset_index().sort_values(by='Total', ascending=True).tail(8)
+        fig_drill = px.bar(df_ranking, x='Total', y=entidade_foco, orientation='h', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
+        fig_drill.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#E5E7EB', xaxis=dict(showgrid=False, showticklabels=False), yaxis=dict(showgrid=False), coloraxis_showscale=False, height=320, margin=dict(l=15, r=15, t=10, b=40), legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
+        st.plotly_chart(fig_drill, use_container_width=True, config={'displayModeBar': 'hover'})
+        
+        df_matriz_dinamica = gerar_tabela_analitica_padrao(df_atual, df_ly, entidade_foco, incluir_total=True).sort_values(by='Vendas', ascending=False)
+        st.dataframe(df_matriz_dinamica, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_dinamica, entidade_foco))
+
+# ==========================================================
+# 📋 TABELA DINÂMICA
+# ==========================================================
+elif pagina_selecionada == "📋 Tabela Dinâmica":
+    with st.container(border=True):
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📋</div><h4 class='chart-title-text'>Tabela Dinâmica - Hierarquia Mestre-Detalhe</h4></div>", unsafe_allow_html=True)
+        e_linhas = st.selectbox("Agrupar Linhas (Index)", options=["Canal", "Categoria", "Subcategoria", "Fabricante"])
+        if not df_atual.empty or not df_ly.empty:
+            df_matriz_macro = gerar_tabela_analitica_padrao(df_atual, df_ly, e_linhas, incluir_total=False).sort_values(by='Vendas', ascending=False)
+            linhas_exibicao, mapeamento_linhas, ponteiro_indice = [], {}, 0
+            
+            for _, row in df_matriz_macro.iterrows():
+                item_nome = row[e_linhas]
+                esta_expandido = item_nome in st.session_state['expanded_items']
+                linha_mestre = row.copy()
+                linha_mestre[e_linhas] = f"   -   {item_nome}" if esta_expandido else f"   +   {item_nome}"
+                linhas_exibicao.append(linha_mestre)
+                mapeamento_linhas[ponteiro_indice] = {'type': 'master', 'name': item_nome}
+                ponteiro_indice += 1
+                
+                if esta_expandido:
+                    df_matriz_sub = gerar_tabela_analitica_padrao(df_atual[df_atual[e_linhas] == item_nome], df_ly[df_ly[e_linhas] == item_nome], 'Produto', incluir_total=False).sort_values(by='Vendas', ascending=False)
+                    for _, sub_row in df_matriz_sub.iterrows():
+                        linha_filha = sub_row.copy()
+                        linha_filha[e_linhas] = f"          {sub_row['Produto']}"
+                        linhas_exibicao.append(linha_filha)
+                        mapeamento_linhas[ponteiro_indice] = {'type': 'child', 'name': sub_row['Produto']}
+                        ponteiro_indice += 1
+                        
+            df_final_display = pd.DataFrame(linhas_exibicao) if linhas_exibicao else pd.DataFrame(columns=df_matriz_macro.columns)
+            if not df_final_display.empty:
+                df_total_geral_row = gerar_tabela_analitica_padrao(df_atual, df_ly, e_linhas, incluir_total=True).tail(1).copy()
+                df_total_geral_row[e_linhas] = "Total Geral"
+                df_final_display = pd.concat([df_final_display, df_total_geral_row], ignore_index=True)
+                
+            selecao = st.dataframe(df_final_display, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_final_display, e_linhas), on_select="rerun", selection_mode="single-row", key=f"pivot_{st.session_state['df_key_counter']}")
+            rows_selecionadas = selecao.selection.get("rows", []) if selecao else []
+            if rows_selecionadas:
+                meta_linha = mapeamento_linhas.get(rows_selecionadas[0])
+                if meta_linha and meta_linha['type'] == 'master':
+                    if meta_linha['name'] in st.session_state['expanded_items']: st.session_state['expanded_items'].remove(meta_linha['name'])
+                    else: st.session_state['expanded_items'].add(meta_linha['name'])
+                    st.session_state['df_key_counter'] += 1
+                    st.rerun()
+
+# ==========================================================
+# ⚙️ ABA: CONFIGURAÇÕES
+# ==========================================================
+elif pagina_selecionada == "⚙️ Configurações":
+    with st.container(border=True):
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>⚙️</div><h4 class='chart-title-text'>Console de Governança do Sistema</h4></div>", unsafe_allow_html=True)
+        st.write("🔧 **Configurações do Engine de Dados**")
+        st.caption(f"Conexão do Banco de Dados: Ativa (PostgreSQL Supabase)")
+        st.caption(f"Sincronização de Carga Externa: Conectada (Aba: Base_Vendas)")
+        if st.button("🗑️ Limpar Cache do Sistema", use_container_width=True):
+            st.cache_data.clear()
+            st.success("Cache limpo com sucesso!")
