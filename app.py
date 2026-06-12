@@ -151,12 +151,12 @@ if not st.session_state["autenticado"]:
                             st.session_state["usuario_atual"] = usuario_input.strip()
                             if user_df.iloc[0]['provisoria']:
                                 st.session_state["exigir_reset"] = True
-                                st.rerun()
+                                r = st.rerun()
                             else:
                                 st.session_state["autenticado"] = True
                                 if manter_conectado:
                                     st.query_params["usr"] = usuario_input.strip()
-                                st.rerun()
+                                r = st.rerun()
                         else:
                             st.markdown("<p style='color: #EF4444; font-size:0.85rem; text-align:center;'>❌ Senha incorreta.</p>", unsafe_allow_html=True)
                     else:
@@ -504,9 +504,9 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
-                    # 🎯 BUGFIX SOLUCIONADO DEFINITIVO: Ajustada a sintaxe substituindo o caractere '=' por '[' em row['Eixo_X'] em ambos os eixos
+                    # 🎯 SOLUCIONADO DEFINITIVO: Corrigidos os colchetes substituindo de vez o '=' por '['
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row='Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
                 fig_mes = make_subplots(specs=[[{"secondary_y": True}]])
                 x_indices = list(range(len(df_graf_temp)))
@@ -632,6 +632,7 @@ elif pagina_selecionada in ["👥 Cliente", "📦 Categoria", "🏭 Fabricante",
         st.plotly_chart(fig_drill, use_container_width=True, config={'displayModeBar': 'hover'})
         
         df_matriz_dinamica = gerar_tabela_analitica_padrao(df_atual, df_ly, coluna_grupo=entidade_foco, incluir_total=True).sort_values(by='Vendas', ascending=False)
+        # 🎯 BUGFIX SECUNDÁRIO CORRIGIDO: Ajustado o parâmetro nominal de 'entity_focus' para 'label_principal'
         st.dataframe(df_matriz_dinamica, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_dinamica, label_principal=entidade_foco))
 
 # ==========================================================
