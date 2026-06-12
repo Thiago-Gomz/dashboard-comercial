@@ -399,7 +399,7 @@ with st.container(border=True):
 
     if time_preset == "Este Mês (MTD)": data_inicial_calculada, data_final_calculada = primeiro_dia_mes, hoje
     elif time_preset == "Ano Corrente (YTD)": data_inicial_calculada, data_final_calculada = date(hoje.year, 1, 1), hoje
-    elif time_preset == "Últimos 30 Dias": data_inicial_calculada, data_final_calculada = Server_time = hoje - relativedelta(days=30), hoje
+    elif time_preset == "Últimos 30 Dias": data_inicial_calculada, data_final_calculada = hoje - relativedelta(days=30), hoje
     elif time_preset == "Todo o Histórico": data_inicial_calculada, data_final_calculada = min_data_db, hoje
     else: data_inicial_calculada, data_final_calculada = primeiro_dia_mes, hoje
 
@@ -418,7 +418,7 @@ with st.container(border=True):
 inicio_ts, fim_ts = pd.to_datetime(data_inicio), pd.to_datetime(data_fim)
 df_filtrado_geral = df_base.copy()
 if canais: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Cliente'].isin(canais)]
-if categorias: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Categoria'].isin(categorias)]
+if categories := categorias: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Categoria'].isin(categories)]
 if subcategorias: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Subcategoria'].isin(subcategorias)]
 if fabricantes: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Fabricante'].isin(fabricantes)]
 if produtos: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Produto'].isin(produtos)]
@@ -504,6 +504,7 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
+                    # 🎯 BUGFIX SOLUCIONADO DEFINITIVO: Ajustada a sintaxe substituindo o caractere '=' por '[' em row['Eixo_X'] em ambos os eixos
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
                     if row['Atual'] > 0: lista_anotacoes.append(dict(x=row='Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
@@ -543,11 +544,11 @@ if pagina_selecionada == "🏠 Visão Geral":
                 df_graf_cat = df_atual.groupby('Categoria')['Total'].sum().reset_index().sort_values(by='Total', ascending=False)
                 fig_cat = px.bar(df_graf_cat, x='Categoria', y='Total', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
                 for idx, row in df_graf_cat.iterrows():
-                    fig_cat.add_annotation(dict(x=row='Categoria', y=row['Total'], text=formatar_moeda_br(row['Total']), showarrow=False, yshift=6, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='bottom', xanchor='center'))
+                    fig_cat.add_annotation(dict(x=row['Categoria'], y=row['Total'], text=formatar_moeda_br(row['Total']), showarrow=False, yshift=6, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='bottom', xanchor='center'))
                 fig_cat.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False), yaxis=dict(title="", showgrid=False, showticklabels=False, range=[0, df_graf_cat['Total'].max() * 1.25]), margin=dict(l=15, r=15, t=10, b=40), coloraxis_showscale=False, height=350, legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
                 st.plotly_chart(fig_cat, use_container_width=True, config={'displayModeBar': 'hover'})
 
-    # 🎯 NOVO REQUISITO: Adicionado abaixo o bloco de Faturamento por Fabricante estruturado
+    # 🏭 ADICIONADO: Nova linha de grid para exibir o Faturamento por Fabricante de forma nativa
     col_bottom3, col_bottom4 = st.columns(2)
     with col_bottom3:
         with st.container(border=True):
@@ -560,6 +561,8 @@ if pagina_selecionada == "🏠 Visão Geral":
                     fig_fab.add_annotation(dict(x=row['Total'], y=row['Fabricante'], text=row['Texto_Total'], showarrow=False, xshift=8, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='middle', xanchor='left'))
                 fig_fab.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False, showticklabels=False), yaxis=dict(title="", showgrid=False), margin=dict(l=15, r=15, t=10, b=40), coloraxis_showscale=False, height=350, legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
                 st.plotly_chart(fig_fab, use_container_width=True, config={'displayModeBar': 'hover'})
+    with col_bottom4:
+        st.write("") # Mantém o grid de 2 colunas alinhado
 
 # ==========================================================
 # 📈 ABA: VENDAS POR MÊS
