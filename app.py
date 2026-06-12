@@ -6,9 +6,46 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sqlalchemy import text
+from PIL import Image
+import numpy as np
+import io
+import base64
 
 # CONFIGURAÇÃO MANDATÓRIA: Primeira linha para ativar o modo tela cheia nativo
 st.set_page_config(page_title="Datalake Comercial Executivo", layout="wide")
+
+# ==========================================================
+# 🎯 MOTOR DE TRATAMENTO DE IMAGEM: DARK MODE AUTOMÁTICO
+# ==========================================================
+@st.cache_data
+def obter_logo_sem_fundo_comercial():
+    try:
+        img = Image.open("Logo.jpeg").convert("RGBA")
+        data = np.array(img)
+        
+        # 1. Detecta o fundo branco e clareia para remoção absoluta
+        fundo_branco = (data[:, :, 0] > 220) & (data[:, :, 1] > 220) & (data[:, :, 2] > 220)
+        
+        # 2. Detecta as letras pretas (ECO representação)
+        letras_pretas = (data[:, :, 0] < 120) & (data[:, :, 1] < 120) & (data[:, :, 2] < 120) & (~fundo_branco)
+        
+        # 3. Transforma fundo em transparente e texto preto em BRANCO CORPORATIVO
+        data[fundo_branco] = [0, 0, 0, 0]
+        data[letras_pretas] = [248, 250, 252, 255] # #F8FAFC
+        
+        return Image.fromarray(data)
+    except Exception:
+        return None
+
+def converter_imagem_base64(img):
+    if img is None: return ""
+    buffered = io.BytesIO()
+    img.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode()
+
+# Inicializa e converte a logo tratada
+logo_eco = obter_logo_sem_fundo_comercial()
+logo_b64 = converter_imagem_base64(logo_eco)
 
 # ==========================================================
 # 🔐 1. ENGINE DE AUTENTICAÇÃO REAL COM PERSISTÊNCIA DE URL
@@ -34,8 +71,18 @@ if not st.session_state["autenticado"]:
         .stApp { background-color: #050810; font-family: 'Inter', sans-serif; }
         div[data-testid="stHeader"], header[data-testid="stHeader"] { display: none !important; }
         [data-testid="stSidebar"] { display: none !important; }
+        
+        /* Customiza o bloco do container nativo para ser o card de login */
+        div[data-testid="stVerticalBlockBorderWrapper"] {
+            background-color: #0E1320 !important;
+            border: 1px solid #1E293B !important;
+            border-radius: 16px !important;
+            padding: 32px !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5) !important;
+        }
+        
         .stTextInput input {
-            background-color: #0E1320 !important; color: #F9FAFB !important;
+            background-color: #050810 !important; color: #F9FAFB !important;
             border: 1px solid #1E293B !important; border-radius: 8px !important;
             padding: 12px 16px !important; font-size: 0.95rem !important;
         }
@@ -48,75 +95,73 @@ if not st.session_state["autenticado"]:
             border-radius: 8px !important; border: none !important; padding: 12px 0px !important;
         }
         div.stButton > button:hover { background-color: #1D4ED8 !important; }
-        .google-auth-card {
-            background-color: #0E1320; border: 1px solid #1E293B; border-radius: 16px;
-            padding: 40px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
-            max-width: 420px; margin: 0 auto;
-        }
         </style>
     """, unsafe_allow_html=True)
     
-    st.write("\n" * 3)
+    st.markdown('<div style="height: 12vh;"></div>', unsafe_allow_html=True)
+    
     _, col_login_wrapper, _ = st.columns([1, 1.1, 1])
     
     with col_login_wrapper:
-        st.markdown('<div class="google-auth-card">', unsafe_allow_html=True)
-        conn = st.connection("postgresql", type="sql")
-        
-        if st.session_state["exigir_reset"]:
-            st.markdown("<h2 style='text-align: center; color: #F8FAFC; font-weight: 700; margin-bottom:4px;'>Definir nova senha</h2>", unsafe_allow_html=True)
-            nova_senha = st.text_input("Nova senha", type="password", key="new_pwd")
-            confirma_senha = st.text_input("Confirme a nova senha", type="password", key="conf_pwd")
-            
-            if st.button("Salvar e Acessar", use_container_width=True):
-                if not nova_senha or nova_senha == "Mudar123!":
-                    st.markdown("<p style='color:#EF4444; font-size:0.85rem; text-align:center;'>❌ Escolha uma senha diferente.</p>", unsafe_allow_html=True)
-                elif nova_senha == confirma_senha:
-                    with conn.session as session:
-                        session.execute(
-                            text("UPDATE usuarios SET senha = :senha, provisoria = :provisoria WHERE email = :email"), 
-                            {"senha": nova_senha, "provisoria": False, "email": st.session_state["usuario_atual"]}
-                        )
-                        session.commit()
-                    st.session_state["autenticado"] = True
-                    st.session_state["exigir_reset"] = False
-                    st.success("Senha alterada!")
-                    st.rerun()
-                else:
-                    st.markdown("<p style='color:#EF4444; font-size:0.85rem; text-align:center;'>❌ As senhas não coincidem.</p>", unsafe_allow_html=True)
-        else:
-            st.markdown("<h2 style='text-align: center; color: #F8FAFC; font-weight: 700; margin-bottom: 4px;'>Fazer login</h2>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; color: #94A3B8; font-size:0.95rem; margin-bottom: 30px;'>Prosseguir para o Datalake Executivo</p>", unsafe_allow_html=True)
-            
-            usuario_input = st.text_input("E-mail corporativo", placeholder="diretor@empresa.com")
-            senha_input = st.text_input("Digite sua senha", type="password", placeholder="••••••••")
-            
-            manter_conectado = st.checkbox("Manter-me conectado", value=True)
-            st.write("")
-            
-            if st.button("Próximo", use_container_width=True):
-                query = "SELECT senha, provisoria, status FROM usuarios WHERE email = :email"
-                user_df = conn.query(query, params={"email": usuario_input.strip()}, ttl=0)
+        with st.container(border=True):
+            if logo_eco is not None:
+                st.markdown(f'<div style="display: flex; justify-content: center; align-items: center; margin-bottom: 24px; padding-top: 10px;"><img src="data:image/png;base64,{logo_b64}" style="max-width: 85%; height: auto;"/></div>', unsafe_allow_html=True)
                 
-                if not user_df.empty:
-                    if user_df.iloc[0]['status'] != "Ativo":
-                        st.markdown("<p style='color: #EF4444; font-size:0.85rem; text-align:center;'>🚫 Usuário revogado.</p>", unsafe_allow_html=True)
-                    elif senha_input == user_df.iloc[0]['senha']:
-                        st.session_state["usuario_atual"] = usuario_input.strip()
-                        if user_df.iloc[0]['provisoria']:
-                            st.session_state["exigir_reset"] = True
-                            st.rerun()
-                        else:
-                            st.session_state["autenticado"] = True
-                            if manter_conectado:
-                                st.query_params["usr"] = usuario_input.strip()
-                            st.rerun()
+            conn = st.connection("postgresql", type="sql")
+            
+            if st.session_state["exigir_reset"]:
+                st.markdown("<h2 style='text-align: center; color: #F8FAFC; font-weight: 700; margin-bottom:4px;'>Definir nova senha</h2>", unsafe_allow_html=True)
+                nova_senha = st.text_input("Nova senha", type="password", key="new_pwd")
+                confirma_senha = st.text_input("Confirme a nova senha", type="password", key="conf_pwd")
+                
+                if st.button("Salvar e Acessar", use_container_width=True):
+                    if not nova_senha or nova_senha == "Mudar123!":
+                        st.markdown("<p style='color:#EF4444; font-size:0.85rem; text-align:center;'>❌ Escolha uma senha diferente.</p>", unsafe_allow_html=True)
+                    elif nova_senha == confirma_senha:
+                        with conn.session as session:
+                            session.execute(
+                                text("UPDATE usuarios SET senha = :senha, provisoria = :provisoria WHERE email = :email"), 
+                                {"senha": nova_senha, "provisoria": False, "email": st.session_state["usuario_atual"]}
+                            )
+                            session.commit()
+                        st.session_state["autenticado"] = True
+                        st.session_state["exigir_reset"] = False
+                        st.success("Senha alterada!")
+                        st.rerun()
                     else:
-                        st.markdown("<p style='color: #EF4444; font-size:0.85rem; text-align:center;'>❌ Senha incorreta.</p>", unsafe_allow_html=True)
-                else:
-                    st.markdown("<p style='color: #EF4444; font-size:0.85rem; text-align:center;'>❌ Usuário não localizado.</p>", unsafe_allow_html=True)
+                        st.markdown("<p style='color:#EF4444; font-size:0.85rem; text-align:center;'>❌ As senhas não coincidem.</p>", unsafe_allow_html=True)
+            else:
+                st.markdown("<h2 style='text-align: center; color: #F8FAFC; font-weight: 700; margin-top: 0px; margin-bottom: 4px; font-size: 1.75rem;'>Fazer login</h2>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align: center; color: #94A3B8; font-size:0.95rem; margin-bottom: 24px;'>Prosseguir para o Datalake Executivo</p>", unsafe_allow_html=True)
+                
+                usuario_input = st.text_input("E-mail corporativo", placeholder="diretor@empresa.com")
+                senha_input = st.text_input("Digite sua senha", type="password", placeholder="••••••••")
+                
+                manter_conectado = st.checkbox("Manter-me conectado", value=True)
+                st.write("")
+                
+                if st.button("Próximo", use_container_width=True):
+                    query = "SELECT senha, provisoria, status FROM usuarios WHERE email = :email"
+                    user_df = conn.query(query, params={"email": usuario_input.strip()}, ttl=0)
                     
-        st.markdown('</div>', unsafe_allow_html=True)
+                    if not user_df.empty:
+                        if user_df.iloc[0]['status'] != "Ativo":
+                            st.markdown("<p style='color: #EF4444; font-size:0.85rem; text-align:center;'>🚫 Usuário revogado.</p>", unsafe_allow_html=True)
+                        elif senha_input == user_df.iloc[0]['senha']:
+                            st.session_state["usuario_atual"] = usuario_input.strip()
+                            if user_df.iloc[0]['provisoria']:
+                                st.session_state["exigir_reset"] = True
+                                st.rerun()
+                            else:
+                                st.session_state["autenticado"] = True
+                                if manter_conectado:
+                                    st.query_params["usr"] = usuario_input.strip()
+                                st.rerun()
+                        else:
+                            st.markdown("<p style='color: #EF4444; font-size:0.85rem; text-align:center;'>❌ Senha incorreta.</p>", unsafe_allow_html=True)
+                    else:
+                        st.markdown("<p style='color: #EF4444; font-size:0.85rem; text-align:center;'>❌ Usuário não localizado.</p>", unsafe_allow_html=True)
+                        
     st.stop()
 
 # ==========================================================
@@ -314,8 +359,11 @@ with st.spinner("🔄 Sincronizando datalake executivo..."):
     df_base = carregar_dados_comerciais()
 
 # ==========================================================
-# BARRA LATERAL DE ROTEAMENTO
+# BARRA LATERAL DE ROTEAMENTO (LOGO PREMIUM)
 # ==========================================================
+if logo_eco is not None:
+    st.sidebar.markdown(f'<div style="display: flex; justify-content: center; align-items: center; padding: 12px 24px 20px 24px;"><img src="data:image/png;base64,{logo_b64}" style="max-width: 90%; height: auto;"/></div>', unsafe_allow_html=True)
+
 st.sidebar.markdown("<h2 style='font-size: 1.25rem; font-weight: 700; margin-bottom: 0px;'>Módulos de Análise</h2>", unsafe_allow_html=True)
 st.sidebar.markdown("<p style='color: #64748B; font-size: 0.8rem; margin-top: 0px;'>Executive Suite v4.0</p>", unsafe_allow_html=True)
 st.sidebar.write("")
@@ -395,7 +443,6 @@ v_qtd = ((qtd_at / qtd_ly) - 1) * 100 if qtd_ly > 0 else 0
 v_tk = ((tk_at / tk_ly) - 1) * 100 if tk_ly > 0 else 0
 v_ped = ((ped_at / ped_ly) - 1) * 100 if ped_ly > 0 else 0
 
-# 🎯 REQUISITO DE FORMATAÇÃO: Alterados para carregar formato abreviado (Vendas) e inteiros limpos (Itens e Pedidos)
 fat_at_str = formatar_moeda_br(fat_at)
 qtd_at_str = f"{qtd_at:.0f}"
 tk_at_str = formatar_moeda_br_completo(tk_at)
@@ -411,7 +458,6 @@ v_ped_str = f"{v_ped:+.1f}%".replace('.', ',')
 # ==========================================================
 if pagina_selecionada != "⚙️ Configurações":
     k1, k2, k3, k4 = st.columns(4)
-    # 🎯 REQUISITO DE FORMATAÇÃO: Alinhamento das quantidades e moedas do rodapé sem pontos de milhar
     with k1: st.markdown(f"<div class='kpi-card blue-accent'><div class='kpi-title'>Qtd de Itens</div><div class='kpi-value'>{qtd_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_qtd >= 0 else 'badge-negative'}'>{v_qtd_str}</span><span class='kpi-ly-text'>vs LY ({f'{qtd_ly:.0f}'})</span></div></div>", unsafe_allow_html=True)
     with k2: st.markdown(f"<div class='kpi-card emerald-accent'><div class='kpi-title'>Ticket Médio</div><div class='kpi-value'>{tk_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_tk >= 0 else 'badge-negative'}'>{v_tk_str}</span><span class='kpi-ly-text'>vs LY ({formatar_moeda_br(tk_ly)})</span></div></div>", unsafe_allow_html=True)
     with k3: st.markdown(f"<div class='kpi-card orange-accent'><div class='kpi-title'>Pedidos</div><div class='kpi-value'>{ped_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_ped >= 0 else 'badge-negative'}'>{v_ped_str}</span><span class='kpi-ly-text'>vs LY ({f'{ped_ly:.0f}'})</span></div></div>", unsafe_allow_html=True)
@@ -458,6 +504,7 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
+                    # 🎯 BUGFIX CORRIGIDO COMPLETO: Corrigido o caractere '=' acidental por '[' em row['Eixo_X'] tanto no LY quanto no Atual
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
                     if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
@@ -569,7 +616,7 @@ elif pagina_selecionada in ["👥 Cliente", "📦 Categoria", "🏭 Fabricante",
         st.plotly_chart(fig_drill, use_container_width=True, config={'displayModeBar': 'hover'})
         
         df_matriz_dinamica = gerar_tabela_analitica_padrao(df_atual, df_ly, coluna_grupo=entidade_foco, incluir_total=True).sort_values(by='Vendas', ascending=False)
-        st.dataframe(df_matriz_dinamica, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_dinamica, entidade_foco))
+        st.dataframe(df_matriz_dinamica, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_dinamica, entity_focus=entidade_foco))
 
 # ==========================================================
 # 📋 TABELA DINÂMICA
