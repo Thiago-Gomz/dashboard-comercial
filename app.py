@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 import plotly.express as px
 import plotly.graph_objects as go
@@ -124,14 +124,12 @@ if not st.session_state["autenticado"]:
 # ==========================================================
 st.markdown("""
     <style>
-    /* Customização básica das fontes e margens do bloco principal */
     .block-container { 
         padding-top: 4.5rem !important; 
         padding-bottom: 2rem !important; 
         max-width: 98% !important;
     }
     
-    /* Configuração visual exclusiva dos cards de KPI superiores */
     .kpi-card {
         background: #0E1320; border: 1px solid #1E293B; border-radius: 14px; padding: 24px; position: relative; overflow: hidden;
         transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
@@ -149,12 +147,10 @@ st.markdown("""
     .badge-negative { background-color: rgba(239, 68, 68, 0.1); color: #EF4444; padding: 4px 10px; border-radius: 6px; font-weight: 600; margin-right: 10px; }
     .kpi-ly-text { color: #64748B; font-size: 0.8rem; font-weight: 500; }
     
-    /* Títulos dos gráficos internos */
     .chart-header { display: flex; align-items: center; margin-bottom: 10px !important; }
     .chart-icon-box { background: #1E293B; padding: 8px; border-radius: 8px; margin-right: 12px; display:flex; align-items:center; justify-content:center;}
     .chart-title-text { margin: 0; color: #F8FAFC; font-size: 1.05rem; font-weight: 600; letter-spacing: 0.01em;}
     
-    /* Customização do Menu Lateral */
     div[data-testid="stRadio"] div[role="radiogroup"] label {
         background-color: transparent !important; color: #94A3B8 !important;
         border-radius: 6px !important; padding: 8px 12px !important; margin-bottom: 3px !important; width: 100% !important; display: flex !important;
@@ -163,12 +159,10 @@ st.markdown("""
     div[data-testid="stRadio"] div[role="radiogroup"] label[data-checked="true"] { background-color: #1E3A8A !important; color: #3B82F6 !important; font-weight: 600 !important; }
     div[role="radiogroup"] label span:first-child { display: none !important; }
     
-    /* Permite transbordo controlado para garantir funcionamento perfeito da barra nativa do Streamlit */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         overflow: visible !important;
     }
     
-    /* Supressão de scrollbars redundantes em tabelas */
     div[data-testid="stDataFrame"]::-webkit-scrollbar,
     .stDataFrame > div::-webkit-scrollbar {
         display: none !important;
@@ -198,7 +192,7 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
     cols_grupo = [coluna_grupo] if isinstance(coluna_grupo, str) else coluna_grupo
     
     if not df_at.empty:
-        agg_at = df_at.groupby(cols_grupo).agg(Vendas=('Total', 'sum'), Qtd_de_Itens=('Quantidade', 'sum'), Pedidos=('Total', 'size')).reset_index()
+        agg_at = df_at.groupby(cols_grupo).agg(Vendas=('Total', 'sum'), Qtd_de_Itens=('Quantidade', 'sum'), Pedidos=('Ped_Cliente', 'nunique')).reset_index()
     else:
         agg_at = pd.DataFrame(columns=cols_grupo + ['Vendas', 'Qtd_de_Itens', 'Pedidos'])
         
@@ -208,7 +202,7 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
         df_ly['Mes_Ano'] = df_ly['Data_Shifted'].dt.strftime('%m/%Y')
         
     if not df_ly.empty:
-        agg_ly = df_ly.groupby(cols_grupo).agg(Vendas_LY=('Total', 'sum'), Itens_LY=('Quantidade', 'sum'), Pedidos_LY=('Total', 'size')).reset_index()
+        agg_ly = df_ly.groupby(cols_grupo).agg(Vendas_LY=('Total', 'sum'), Itens_LY=('Quantidade', 'sum'), Pedidos_LY=('Ped_Cliente', 'nunique')).reset_index()
     else:
         agg_ly = pd.DataFrame(columns=cols_grupo + ['Vendas_LY', 'Itens_LY', 'Pedidos_LY'])
         
@@ -219,8 +213,8 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
     df_merged['Diferença Pedidos %'] = df_merged.apply(lambda r: ((r['Pedidos'] / r['Pedidos_LY']) - 1) * 100 if r['Pedidos_LY'] > 0 else (100 if r['Pedidos'] > 0 else 0), axis=1)
     df_merged['Diferença Itens %'] = df_merged.apply(lambda r: ((r['Qtd_de_Itens'] / r['Itens_LY']) - 1) * 100 if r['Itens_LY'] > 0 else (100 if r['Qtd_de_Itens'] > 0 else 0), axis=1)
     
-    df_merged['Ticket Medio'] = df_merged.apply(lambda r: r['Vendas'] / r['Pedidos'] if r['Pedidos'] > 0 else 0, axis=1)
-    df_merged['Ticket Medio LY'] = df_merged.apply(lambda r: r['Vendas_LY'] / r['Pedidos_LY'] if r['Pedidos_LY'] > 0 else 0, axis=1)
+    df_merged['Ticket Medio'] = df_merged.apply(lambda r: r['Vendas'] / r['Qtd_de_Itens'] if r['Qtd_de_Itens'] > 0 else 0, axis=1)
+    df_merged['Ticket Medio LY'] = df_merged.apply(lambda r: r['Vendas_LY'] / r['Itens_LY'] if r['Itens_LY'] > 0 else 0, axis=1)
     df_merged['Diferença Ticket %'] = df_merged.apply(lambda r: ((r['Ticket Medio'] / r['Ticket Medio LY']) - 1) * 100 if r['Ticket Medio LY'] > 0 else (100 if r['Ticket Medio'] > 0 else 0), axis=1)
     
     df_merged = df_merged.rename(columns={'Qtd_de_Itens': 'Qtd de Itens', 'Vendas_LY': 'Vendas LY', 'Itens_LY': 'Itens LY', 'Pedidos_LY': 'Pedidos LY'})
@@ -236,15 +230,17 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
         total_row['Vendas LY'] = df_ly_raw['Total'].sum()
         total_row['Diferença Vendas %'] = ((total_row['Vendas'] / total_row['Vendas LY']) - 1) * 100 if total_row['Vendas LY'] > 0 else (100 if total_row['Vendas'] > 0 else 0)
         total_row['% de Participação'] = 100.0 if total_row['Vendas'] > 0 else 0
-        total_row['Pedidos'] = len(df_at)
-        total_row['Pedidos LY'] = len(df_ly_raw)
+        
+        total_row['Pedidos'] = df_at['Ped_Cliente'].nunique()
+        total_row['Pedidos LY'] = df_ly_raw['Ped_Cliente'].nunique()
         total_row['Diferença Pedidos %'] = ((total_row['Pedidos'] / total_row['Pedidos LY']) - 1) * 100 if total_row['Pedidos LY'] > 0 else (100 if total_row['Pedidos'] > 0 else 0)
+        
         total_row['Qtd de Itens'] = df_at['Quantidade'].sum()
         total_row['Itens LY'] = df_ly_raw['Quantidade'].sum()
         total_row['Diferença Itens %'] = ((total_row['Qtd de Itens'] / total_row['Itens LY']) - 1) * 100 if total_row['Itens LY'] > 0 else (100 if total_row['Qtd de Itens'] > 0 else 0)
         
-        tm_at = total_row['Vendas'] / total_row['Pedidos'] if total_row['Pedidos'] > 0 else 0
-        tm_ly = total_row['Vendas LY'] / total_row['Pedidos LY'] if total_row['Pedidos LY'] > 0 else 0
+        tm_at = total_row['Vendas'] / total_row['Qtd de Itens'] if total_row['Qtd de Itens'] > 0 else 0
+        tm_ly = total_row['Vendas LY'] / total_row['Itens LY'] if total_row['Itens LY'] > 0 else 0
         total_row['Ticket Medio'] = tm_at
         total_row['Ticket Medio LY'] = tm_ly
         total_row['Diferença Ticket %'] = ((tm_at / tm_ly) - 1) * 100 if tm_ly > 0 else (100 if tm_at > 0 else 0)
@@ -276,7 +272,7 @@ def obter_config_colunas_bi(df, label_principal="Dimensão"):
 # ==========================================================
 @st.cache_data(ttl=600)
 def carregar_dados_comerciais():
-    colunas_padrao = ['Data', 'Canal', 'Categoria', 'Subcategoria', 'Fabricante', 'Produto', 'Quantidade', 'Total']
+    colunas_padrao = ['Data', 'Cliente', 'Categoria', 'Subcategoria', 'Fabricante', 'Produto', 'Quantidade', 'Total', 'Ped_Cliente']
     df_vazio = pd.DataFrame(columns=colunas_padrao)
     
     url_csv = "https://docs.google.com/spreadsheets/d/e/2PACX-1vShrCwOpKkCJ9pKpQPVAgeiJ1p-auVIzOaXSIwYsXRuw_B8HYrLpq3Ph4TV96sxJw/pub?sheet=Base_Vendas&output=csv"
@@ -288,10 +284,11 @@ def carregar_dados_comerciais():
         
         mapeamento = {
             'data': 'Data', 'mês': 'Data', 'mes': 'Data',
-            'cliente': 'Canal', 'canal': 'Canal', 'categoria': 'Categoria', 
+            'cliente': 'Cliente', 'canal': 'Cliente', 'categoria': 'Categoria', 
             'subcategoria': 'Subcategoria', 'fabricante': 'Fabricante', 
             'descrição': 'Produto', 'produto': 'Produto', 'qtde': 'Quantidade', 
-            'quantidade': 'Quantidade', 'total': 'Total'
+            'quantidade': 'Quantidade', 'total': 'Total',
+            'ped cliente': 'Ped_Cliente', 'ped_cliente': 'Ped_Cliente', 'pedido': 'Ped_Cliente'
         }
         df.columns = [mapeamento.get(c.lower(), c) for c in df.columns]
         
@@ -307,7 +304,8 @@ def carregar_dados_comerciais():
         for col in colunas_padrao:
             if col not in df.columns: df[col] = pd.Series(dtype='object')
         
-        st.session_state['ultima_atualizacao'] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        fuso_br = timezone(timedelta(hours=-3))
+        st.session_state['ultima_atualizacao'] = datetime.now(fuso_br).strftime("%d/%m/%Y %H:%M:%S")
         return df
     except Exception:
         return df_vazio
@@ -324,7 +322,7 @@ st.sidebar.write("")
 
 pagina_selecionada = st.sidebar.radio(
     "",
-    ["🏠 Visão Geral", "📈 Vendas por Mês", "📊 LY", "🔄 Comparação de Períodos", "👥 Canal", "📦 Categoria", "🏭 Fabricante", "🛒 Produto", "📋 Tabela Dinâmica", "⚙️ Configurações"]
+    ["🏠 Visão Geral", "📈 Vendas por Mês", "📊 LY", "🔄 Comparação de Períodos", "👥 Cliente", "📦 Categoria", "🏭 Fabricante", "🛒 Produto", "📋 Tabela Dinâmica", "⚙️ Configurações"]
 )
 st.sidebar.divider()
 
@@ -360,7 +358,7 @@ with st.container(border=True):
     with col_per_ini: data_inicio = st.date_input("Data Inicial", value=data_inicial_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
     with col_per_fim: data_fim = st.date_input("Data Final", value=data_final_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
         
-    with col_can: canais = st.multiselect("Canal", options=df_base['Canal'].dropna().unique(), placeholder="Todos")
+    with col_can: canais = st.multiselect("Cliente", options=df_base['Cliente'].dropna().unique(), placeholder="Todos")
     with col_cat: categorias = st.multiselect("Categoria", options=df_base['Categoria'].dropna().unique(), placeholder="Todas")
     with col_sub: subcategorias = st.multiselect("Subcategoria", options=df_base['Subcategoria'].dropna().unique(), placeholder="Todas")
     with col_fab: fabricantes = st.multiselect("Fabricante", options=df_base['Fabricante'].dropna().unique(), placeholder="Todos")
@@ -371,7 +369,7 @@ with st.container(border=True):
 
 inicio_ts, fim_ts = pd.to_datetime(data_inicio), pd.to_datetime(data_fim)
 df_filtrado_geral = df_base.copy()
-if canais: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Canal'].isin(canais)]
+if canais: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Cliente'].isin(canais)]
 if categorias: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Categoria'].isin(categorias)]
 if subcategorias: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Subcategoria'].isin(subcategorias)]
 if fabricantes: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Fabricante'].isin(fabricantes)]
@@ -385,39 +383,45 @@ formato_data = '%d/%m' if dias_selecionados <= 60 else '%m/%Y'
 
 # Mapeamento e Agregações Compartilhadas
 fat_at, qtd_at = df_atual['Total'].sum(), df_atual['Quantidade'].sum()
-tk_at = fat_at / len(df_atual) if not df_atual.empty else 0
-cli_at = df_atual['Canal'].nunique()
+tk_at = fat_at / qtd_at if qtd_at > 0 else 0
+ped_at = df_atual['Ped_Cliente'].nunique()
 
 fat_ly, qtd_ly = df_ly['Total'].sum(), df_ly['Quantidade'].sum()
-tk_ly = fat_ly / len(df_ly) if not df_ly.empty else 0
-cli_ly = df_ly['Canal'].nunique()
+tk_ly = fat_ly / qtd_ly if qtd_ly > 0 else 0
+ped_ly = df_ly['Ped_Cliente'].nunique()
 
 v_fat = ((fat_at / fat_ly) - 1) * 100 if fat_ly > 0 else 0
 v_qtd = ((qtd_at / qtd_ly) - 1) * 100 if qtd_ly > 0 else 0
 v_tk = ((tk_at / tk_ly) - 1) * 100 if tk_ly > 0 else 0
-v_cli = ((cli_at / cli_ly) - 1) * 100 if cli_ly > 0 else 0
+v_ped = ((ped_at / ped_ly) - 1) * 100 if ped_ly > 0 else 0
 
-fat_at_str = formatar_moeda_br_completo(fat_at).split(',')[0]
-qtd_at_str = f"{qtd_at:,.0f}".replace(",", ".")
+# 🎯 REQUISITO DE FORMATAÇÃO: Alterados para carregar formato abreviado (Vendas) e inteiros limpos (Itens e Pedidos)
+fat_at_str = formatar_moeda_br(fat_at)
+qtd_at_str = f"{qtd_at:.0f}"
 tk_at_str = formatar_moeda_br_completo(tk_at)
+ped_at_str = f"{ped_at:.0f}"
 
 v_fat_str = f"{v_fat:+.1f}%".replace('.', ',')
 v_qtd_str = f"{v_qtd:+.1f}%".replace('.', ',')
 v_tk_str = f"{v_tk:+.1f}%".replace('.', ',')
-v_cli_str = f"{v_cli:+.1f}%".replace('.', ',')
+v_ped_str = f"{v_ped:+.1f}%".replace('.', ',')
 
 # ==========================================================
-# 🏠 ABA: VISÃO GERAL
+# 🎯 KPIS GLOBAIS (EXIBIDOS EM TODAS AS ABAS, EXCETO CONFIGURAÇÕES)
+# ==========================================================
+if pagina_selecionada != "⚙️ Configurações":
+    k1, k2, k3, k4 = st.columns(4)
+    # 🎯 REQUISITO DE FORMATAÇÃO: Alinhamento das quantidades e moedas do rodapé sem pontos de milhar
+    with k1: st.markdown(f"<div class='kpi-card blue-accent'><div class='kpi-title'>Qtd de Itens</div><div class='kpi-value'>{qtd_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_qtd >= 0 else 'badge-negative'}'>{v_qtd_str}</span><span class='kpi-ly-text'>vs LY ({f'{qtd_ly:.0f}'})</span></div></div>", unsafe_allow_html=True)
+    with k2: st.markdown(f"<div class='kpi-card emerald-accent'><div class='kpi-title'>Ticket Médio</div><div class='kpi-value'>{tk_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_tk >= 0 else 'badge-negative'}'>{v_tk_str}</span><span class='kpi-ly-text'>vs LY ({formatar_moeda_br(tk_ly)})</span></div></div>", unsafe_allow_html=True)
+    with k3: st.markdown(f"<div class='kpi-card orange-accent'><div class='kpi-title'>Pedidos</div><div class='kpi-value'>{ped_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_ped >= 0 else 'badge-negative'}'>{v_ped_str}</span><span class='kpi-ly-text'>vs LY ({f'{ped_ly:.0f}'})</span></div></div>", unsafe_allow_html=True)
+    with k4: st.markdown(f"<div class='kpi-card purple-accent'><div class='kpi-title'>Vendas</div><div class='kpi-value'>{fat_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_fat >= 0 else 'badge-negative'}'>{v_fat_str}</span><span class='kpi-ly-text'>vs LY ({formatar_moeda_br(fat_ly)})</span></div></div>", unsafe_allow_html=True)
+    st.write("\n")
+
+# ==========================================================
+# ROTEAMENTO EXCLUSIVO DE CONTEÚDO DE TELAS
 # ==========================================================
 if pagina_selecionada == "🏠 Visão Geral":
-    k1, k2, k3, k4 = st.columns(4)
-    with k1: st.markdown(f"<div class='kpi-card blue-accent'><div class='kpi-title'>Faturamento Global</div><div class='kpi-value'>{fat_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_fat >= 0 else 'badge-negative'}'>{v_fat_str}</span><span class='kpi-ly-text'>vs LY ({formatar_moeda_br(fat_ly)})</span></div></div>", unsafe_allow_html=True)
-    with k2: st.markdown(f"<div class='kpi-card emerald-accent'><div class='kpi-title'>Volume de Itens</div><div class='kpi-value'>{qtd_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_qtd >= 0 else 'badge-negative'}'>{v_qtd_str}</span><span class='kpi-ly-text'>vs LY ({f'{qtd_ly:,.0f}'.replace(',', '.')})</span></div></div>", unsafe_allow_html=True)
-    with k3: st.markdown(f"<div class='kpi-card orange-accent'><div class='kpi-title'>Ticket Médio</div><div class='kpi-value'>{tk_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_tk >= 0 else 'badge-negative'}'>{v_tk_str}</span><span class='kpi-ly-text'>vs LY ({formatar_moeda_br(tk_ly)})</span></div></div>", unsafe_allow_html=True)
-    with k4: st.markdown(f"<div class='kpi-card purple-accent'><div class='kpi-title'>Canais Ativos</div><div class='kpi-value'>{cli_at}</div><div class='kpi-footer'><span class='{'badge-positive' if v_cli >= 0 else 'badge-negative'}'>{v_cli_str}</span><span class='kpi-ly-text'>vs LY ({cli_ly})</span></div></div>", unsafe_allow_html=True)
-        
-    st.write("\n")
-    
     with st.container(border=True):
         titulo_grafico_tempo = "Faturamento Diário Comercial" if dias_selecionados <= 60 else "Performance Histórica Mensal"
         st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>{titulo_grafico_tempo} (Atual vs LY)</h4></div>", unsafe_allow_html=True)
@@ -476,15 +480,15 @@ if pagina_selecionada == "🏠 Visão Geral":
     col_bottom1, col_bottom2 = st.columns(2)
     with col_bottom1:
         with st.container(border=True):
-            st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📊</div><h4 class='chart-title-text'>Faturamento por Canal</h4></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📊</div><h4 class='chart-title-text'>Faturamento por Cliente</h4></div>", unsafe_allow_html=True)
             if not df_atual.empty and df_atual['Total'].sum() > 0:
-                df_graf_canal = df_atual.groupby('Canal')['Total'].sum().reset_index().sort_values(by='Total', ascending=True)
-                df_graf_canal['Texto_Total'] = df_graf_canal['Total'].apply(formatar_moeda_br)
-                fig_canal = px.bar(df_graf_canal, x='Total', y='Canal', orientation='h', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
-                for idx, row in df_graf_canal.iterrows():
-                    fig_canal.add_annotation(dict(x=row['Total'], y=row['Canal'], text=row['Texto_Total'], showarrow=False, xshift=8, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='middle', xanchor='left'))
-                fig_canal.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False, showticklabels=False), yaxis=dict(title="", showgrid=False), margin=dict(l=15, r=15, t=10, b=40), coloraxis_showscale=False, height=350, legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
-                st.plotly_chart(fig_canal, use_container_width=True, config={'displayModeBar': 'hover'})
+                df_graf_cliente = df_atual.groupby('Cliente')['Total'].sum().reset_index().sort_values(by='Total', ascending=True)
+                df_graf_cliente['Texto_Total'] = df_graf_cliente['Total'].apply(formatar_moeda_br)
+                fig_cliente = px.bar(df_graf_cliente, x='Total', y='Cliente', orientation='h', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
+                for idx, row in df_graf_cliente.iterrows():
+                    fig_cliente.add_annotation(dict(x=row['Total'], y=row['Cliente'], text=row['Texto_Total'], showarrow=False, xshift=8, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='middle', xanchor='left'))
+                fig_cliente.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False, showticklabels=False), yaxis=dict(title="", showgrid=False), margin=dict(l=15, r=15, t=10, b=40), coloraxis_showscale=False, height=350, legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
+                st.plotly_chart(fig_cliente, use_container_width=True, config={'displayModeBar': 'hover'})
 
     with col_bottom2:
         with st.container(border=True):
@@ -533,7 +537,7 @@ elif pagina_selecionada == "📊 LY":
             st.info("Nenhum histórico localizado no período homólogo do ano anterior (LY).")
 
 # ==========================================================
-# 🔄 ABA: COMPARAÇÃO DE PERÍODOS
+# 🔄 COMPARAÇÃO DE PERÍODOS
 # ==========================================================
 elif pagina_selecionada == "🔄 Comparação de Períodos":
     with st.container(border=True):
@@ -553,8 +557,8 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
 # ==========================================================
 # ABAS DIMENSIONAIS DIRETAS
 # ==========================================================
-elif pagina_selecionada in ["👥 Canal", "📦 Categoria", "🏭 Fabricante", "🛒 Produto"]:
-    mapeamento_abas = {"👥 Canal": "Canal", "📦 Categoria": "Categoria", "🏭 Fabricante": "Fabricante", "🛒 Produto": "Produto"}
+elif pagina_selecionada in ["👥 Cliente", "📦 Categoria", "🏭 Fabricante", "🛒 Produto"]:
+    mapeamento_abas = {"👥 Cliente": "Cliente", "📦 Categoria": "Categoria", "🏭 Fabricante": "Fabricante", "🛒 Produto": "Produto"}
     entidade_foco = mapeamento_abas[pagina_selecionada]
     
     with st.container(border=True):
@@ -564,7 +568,7 @@ elif pagina_selecionada in ["👥 Canal", "📦 Categoria", "🏭 Fabricante", "
         fig_drill.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#E5E7EB', xaxis=dict(showgrid=False, showticklabels=False), yaxis=dict(showgrid=False), coloraxis_showscale=False, height=320, margin=dict(l=15, r=15, t=10, b=40), legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
         st.plotly_chart(fig_drill, use_container_width=True, config={'displayModeBar': 'hover'})
         
-        df_matriz_dinamica = gerar_tabela_analitica_padrao(df_atual, df_ly, entidade_foco, incluir_total=True).sort_values(by='Vendas', ascending=False)
+        df_matriz_dinamica = gerar_tabela_analitica_padrao(df_atual, df_ly, coluna_grupo=entidade_foco, incluir_total=True).sort_values(by='Vendas', ascending=False)
         st.dataframe(df_matriz_dinamica, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_dinamica, entidade_foco))
 
 # ==========================================================
@@ -572,8 +576,8 @@ elif pagina_selecionada in ["👥 Canal", "📦 Categoria", "🏭 Fabricante", "
 # ==========================================================
 elif pagina_selecionada == "📋 Tabela Dinâmica":
     with st.container(border=True):
-        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📋</div><h4 class='chart-title-text'>Tabela Dinâmica - Hierarquia Mestre-Detalhe</h4></div>", unsafe_allow_html=True)
-        e_linhas = st.selectbox("Agrupar Linhas (Index)", options=["Canal", "Categoria", "Subcategoria", "Fabricante"])
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📋</div><h4 class='chart-title-text'>Tabelas</h4></div>", unsafe_allow_html=True)
+        e_linhas = st.selectbox("Selecionar Tabela", options=["Cliente", "Categoria", "Subcategoria", "Fabricante"])
         if not df_atual.empty or not df_ly.empty:
             df_matriz_macro = gerar_tabela_analitica_padrao(df_atual, df_ly, e_linhas, incluir_total=False).sort_values(by='Vendas', ascending=False)
             linhas_exibicao, mapeamento_linhas, ponteiro_indice = [], {}, 0
