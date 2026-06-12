@@ -504,7 +504,6 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
-                    # 🎯 BUGFIX CORRIGIDO COMPLETO: Corrigido o caractere '=' acidental por '[' em row['Eixo_X'] tanto no LY quanto no Atual
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
                     if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
@@ -616,7 +615,7 @@ elif pagina_selecionada in ["👥 Cliente", "📦 Categoria", "🏭 Fabricante",
         st.plotly_chart(fig_drill, use_container_width=True, config={'displayModeBar': 'hover'})
         
         df_matriz_dinamica = gerar_tabela_analitica_padrao(df_atual, df_ly, coluna_grupo=entidade_foco, incluir_total=True).sort_values(by='Vendas', ascending=False)
-        st.dataframe(df_matriz_dinamica, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_dinamica, entity_focus=entidade_foco))
+        st.dataframe(df_matriz_dinamica, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_dinamica, label_principal=entidade_foco))
 
 # ==========================================================
 # 📋 TABELA DINÂMICA
@@ -643,6 +642,11 @@ elif pagina_selecionada == "📋 Tabela Dinâmica":
                     for _, sub_row in df_matriz_sub.iterrows():
                         linha_filha = sub_row.copy()
                         linha_filha[e_linhas] = f"          {sub_row['Produto']}"
+                        
+                        # 🎯 BUGFIX CORRIGIDO: Remove a coluna original 'Produto' para não duplicar no fim da tabela
+                        if 'Produto' in linha_filha.index:
+                            linha_filha = linha_filha.drop('Produto')
+                            
                         linhas_exibicao.append(linha_filha)
                         mapeamento_linhas[ponteiro_indice] = {'type': 'child', 'name': sub_row['Produto']}
                         ponteiro_indice += 1
