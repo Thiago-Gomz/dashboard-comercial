@@ -399,7 +399,7 @@ with st.container(border=True):
 
     if time_preset == "Este Mês (MTD)": data_inicial_calculada, data_final_calculada = primeiro_dia_mes, hoje
     elif time_preset == "Ano Corrente (YTD)": data_inicial_calculada, data_final_calculada = date(hoje.year, 1, 1), hoje
-    elif time_preset == "Últimos 30 Dias": data_inicial_calculada, data_final_calculada = hoje - relativedelta(days=30), hoje
+    elif time_preset == "Últimos 30 Dias": data_inicial_calculada, data_final_calculada = Server_time = hoje - relativedelta(days=30), hoje
     elif time_preset == "Todo o Histórico": data_inicial_calculada, data_final_calculada = min_data_db, hoje
     else: data_inicial_calculada, data_final_calculada = primeiro_dia_mes, hoje
 
@@ -505,7 +505,7 @@ if pagina_selecionada == "🏠 Visão Geral":
                 
                 for i, row in df_graf_temp.iterrows():
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row='Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
                 fig_mes = make_subplots(specs=[[{"secondary_y": True}]])
                 x_indices = list(range(len(df_graf_temp)))
@@ -543,9 +543,23 @@ if pagina_selecionada == "🏠 Visão Geral":
                 df_graf_cat = df_atual.groupby('Categoria')['Total'].sum().reset_index().sort_values(by='Total', ascending=False)
                 fig_cat = px.bar(df_graf_cat, x='Categoria', y='Total', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
                 for idx, row in df_graf_cat.iterrows():
-                    fig_cat.add_annotation(dict(x=row['Categoria'], y=row['Total'], text=formatar_moeda_br(row['Total']), showarrow=False, yshift=6, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='bottom', xanchor='center'))
+                    fig_cat.add_annotation(dict(x=row='Categoria', y=row['Total'], text=formatar_moeda_br(row['Total']), showarrow=False, yshift=6, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='bottom', xanchor='center'))
                 fig_cat.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False), yaxis=dict(title="", showgrid=False, showticklabels=False, range=[0, df_graf_cat['Total'].max() * 1.25]), margin=dict(l=15, r=15, t=10, b=40), coloraxis_showscale=False, height=350, legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
                 st.plotly_chart(fig_cat, use_container_width=True, config={'displayModeBar': 'hover'})
+
+    # 🎯 NOVO REQUISITO: Adicionado abaixo o bloco de Faturamento por Fabricante estruturado
+    col_bottom3, col_bottom4 = st.columns(2)
+    with col_bottom3:
+        with st.container(border=True):
+            st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>🏭</div><h4 class='chart-title-text'>Faturamento por Fabricante</h4></div>", unsafe_allow_html=True)
+            if not df_atual.empty and df_atual['Total'].sum() > 0:
+                df_graf_fab = df_atual.groupby('Fabricante')['Total'].sum().reset_index().sort_values(by='Total', ascending=True)
+                df_graf_fab['Texto_Total'] = df_graf_fab['Total'].apply(formatar_moeda_br)
+                fig_fab = px.bar(df_graf_fab, x='Total', y='Fabricante', orientation='h', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
+                for idx, row in df_graf_fab.iterrows():
+                    fig_fab.add_annotation(dict(x=row['Total'], y=row['Fabricante'], text=row['Texto_Total'], showarrow=False, xshift=8, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='middle', xanchor='left'))
+                fig_fab.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False, showticklabels=False), yaxis=dict(title="", showgrid=False), margin=dict(l=15, r=15, t=10, b=40), coloraxis_showscale=False, height=350, legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
+                st.plotly_chart(fig_fab, use_container_width=True, config={'displayModeBar': 'hover'})
 
 # ==========================================================
 # 📈 ABA: VENDAS POR MÊS
@@ -643,7 +657,6 @@ elif pagina_selecionada == "📋 Tabela Dinâmica":
                         linha_filha = sub_row.copy()
                         linha_filha[e_linhas] = f"          {sub_row['Produto']}"
                         
-                        # 🎯 BUGFIX CORRIGIDO: Remove a coluna original 'Produto' para não duplicar no fim da tabela
                         if 'Produto' in linha_filha.index:
                             linha_filha = linha_filha.drop('Produto')
                             
