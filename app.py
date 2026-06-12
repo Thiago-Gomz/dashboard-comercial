@@ -249,7 +249,7 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
     if not df_ly.empty:
         agg_ly = df_ly.groupby(cols_grupo).agg(Vendas_LY=('Total', 'sum'), Itens_LY=('Quantidade', 'sum'), Pedidos_LY=('Ped_Cliente', 'nunique')).reset_index()
     else:
-        agg_ly = pd.DataFrame(columns=cols_grupo + ['Vendas_LY', 'Itens_LY', 'Pedidos_LY'])
+        agg_ly = pd.DataFrame(columns=cols_grupo + ['Vendas_LY', '賊tens_LY', 'Pedidos_LY'])
         
     df_merged = pd.merge(agg_at, agg_ly, on=cols_grupo, how='outer').fillna(0)
     
@@ -346,7 +346,7 @@ def carregar_dados_comerciais():
                 df[col] = df[col].astype(str).replace('R\$', '', regex=True).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # Força a conversão das colunas de texto para Title Case, limpando vazios e nulos
+        # 🎯 NOVO REQUISITO: Força a conversão das colunas de texto para Title Case, limpando vazios e nulos
         for text_col in ['Cliente', 'Categoria', 'Subcategoria', 'Fabricante', 'Produto']:
             if text_col in df.columns:
                 df[text_col] = df[text_col].astype(str).str.strip().str.title().replace({'Nan': None, 'None': None, '': None})
@@ -396,7 +396,6 @@ with st.container(border=True):
     col_preset, col_per_ini, col_per_fim, col_can, col_cat, col_sub, col_fab, col_pro, col_btn = st.columns([1.5, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 0.8])
 
     hoje = date.today()
-    primeiro_dia_mes = date(hoje.year, Size=hoje.month, day=1) if hasattr(date, 'today') else date.today()
     primeiro_dia_mes = date(hoje.year, hoje.month, 1)
     min_data_db = df_base['Data'].min().date() if not df_base.empty else date(2020, 1, 1)
 
@@ -510,7 +509,7 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
-                    # 🎯 CORREÇÃO CRÍTICA DO COLCHETE CONSOLIDADA MANUAl
+                    # 🎯 BUGFIX CORRIGIDO ABSOLUTO: Injetada a sintaxe correta 'row['Eixo_X']' limpando o caractere '=' acidental
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
                     if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
