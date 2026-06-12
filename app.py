@@ -151,12 +151,12 @@ if not st.session_state["autenticado"]:
                             st.session_state["usuario_atual"] = usuario_input.strip()
                             if user_df.iloc[0]['provisoria']:
                                 st.session_state["exigir_reset"] = True
-                                r = st.rerun()
+                                st.rerun()
                             else:
                                 st.session_state["autenticado"] = True
                                 if manter_conectado:
                                     st.query_params["usr"] = usuario_input.strip()
-                                r = st.rerun()
+                                st.rerun()
                         else:
                             st.markdown("<p style='color: #EF4444; font-size:0.85rem; text-align:center;'>❌ Senha incorreta.</p>", unsafe_allow_html=True)
                     else:
@@ -504,7 +504,6 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
-                    # 🎯 SOLUCIONADO DEFINITIVO: Corrigidos os colchetes substituindo de vez o '=' por '['
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
                     if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
@@ -548,21 +547,17 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_cat.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False), yaxis=dict(title="", showgrid=False, showticklabels=False, range=[0, df_graf_cat['Total'].max() * 1.25]), margin=dict(l=15, r=15, t=10, b=40), coloraxis_showscale=False, height=350, legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
                 st.plotly_chart(fig_cat, use_container_width=True, config={'displayModeBar': 'hover'})
 
-    # 🏭 ADICIONADO: Nova linha de grid para exibir o Faturamento por Fabricante de forma nativa
-    col_bottom3, col_bottom4 = st.columns(2)
-    with col_bottom3:
-        with st.container(border=True):
-            st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>🏭</div><h4 class='chart-title-text'>Faturamento por Fabricante</h4></div>", unsafe_allow_html=True)
-            if not df_atual.empty and df_atual['Total'].sum() > 0:
-                df_graf_fab = df_atual.groupby('Fabricante')['Total'].sum().reset_index().sort_values(by='Total', ascending=True)
-                df_graf_fab['Texto_Total'] = df_graf_fab['Total'].apply(formatar_moeda_br)
-                fig_fab = px.bar(df_graf_fab, x='Total', y='Fabricante', orientation='h', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
-                for idx, row in df_graf_fab.iterrows():
-                    fig_fab.add_annotation(dict(x=row['Total'], y=row['Fabricante'], text=row['Texto_Total'], showarrow=False, xshift=8, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='middle', xanchor='left'))
-                fig_fab.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False, showticklabels=False), yaxis=dict(title="", showgrid=False), margin=dict(l=15, r=15, t=10, b=40), coloraxis_showscale=False, height=350, legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
-                st.plotly_chart(fig_fab, use_container_width=True, config={'displayModeBar': 'hover'})
-    with col_bottom4:
-        st.write("") # Mantém o grid de 2 colunas alinhado
+    # 🎯 ATUALIZAÇÃO: Gráfico de Fabricante configurado em Tela Cheia (100% largura) e Altura = 420
+    with st.container(border=True):
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>🏭</div><h4 class='chart-title-text'>Faturamento por Fabricante</h4></div>", unsafe_allow_html=True)
+        if not df_atual.empty and df_atual['Total'].sum() > 0:
+            df_graf_fab = df_atual.groupby('Fabricante')['Total'].sum().reset_index().sort_values(by='Total', ascending=True)
+            df_graf_fab['Texto_Total'] = df_graf_fab['Total'].apply(formatar_moeda_br)
+            fig_fab = px.bar(df_graf_fab, x='Total', y='Fabricante', orientation='h', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
+            for idx, row in df_graf_fab.iterrows():
+                fig_fab.add_annotation(dict(x=row['Total'], y=row['Fabricante'], text=row['Texto_Total'], showarrow=False, xshift=8, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='middle', xanchor='left'))
+            fig_fab.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False, showticklabels=False), yaxis=dict(title="", showgrid=False), margin=dict(l=15, r=15, t=10, b=40), coloraxis_showscale=False, height=420, legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
+            st.plotly_chart(fig_fab, use_container_width=True, config={'displayModeBar': 'hover'})
 
 # ==========================================================
 # 📈 ABA: VENDAS POR MÊS
@@ -632,7 +627,6 @@ elif pagina_selecionada in ["👥 Cliente", "📦 Categoria", "🏭 Fabricante",
         st.plotly_chart(fig_drill, use_container_width=True, config={'displayModeBar': 'hover'})
         
         df_matriz_dinamica = gerar_tabela_analitica_padrao(df_atual, df_ly, coluna_grupo=entidade_foco, incluir_total=True).sort_values(by='Vendas', ascending=False)
-        # 🎯 BUGFIX SECUNDÁRIO CORRIGIDO: Ajustado o parâmetro nominal de 'entity_focus' para 'label_principal'
         st.dataframe(df_matriz_dinamica, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_dinamica, label_principal=entidade_foco))
 
 # ==========================================================
@@ -668,7 +662,7 @@ elif pagina_selecionada == "📋 Tabela Dinâmica":
                         mapeamento_linhas[ponteiro_indice] = {'type': 'child', 'name': sub_row['Produto']}
                         ponteiro_indice += 1
                         
-            df_final_display = pd.DataFrame(linhas_exibicao) if linhas_exibicao else pd.DataFrame(columns=df_matriz_macro.columns)
+            df_final_display = pd.DataFrame(linhas_exibicao) if lines_exibicao else pd.DataFrame(columns=df_matriz_macro.columns)
             if not df_final_display.empty:
                 df_total_geral_row = gerar_tabela_analitica_padrao(df_atual, df_ly, e_linhas, incluir_total=True).tail(1).copy()
                 df_total_geral_row[e_linhas] = "Total Geral"
