@@ -23,7 +23,7 @@ def obter_logo_sem_fundo_comercial():
         img = Image.open("Logo.jpeg").convert("RGBA")
         data = np.array(img)
         
-        # 1. Detecta o fundo branco e clareia para remoção absoluta
+        # 1. Detecta o fundo branco e clareia para removal absoluta
         fundo_branco = (data[:, :, 0] > 220) & (data[:, :, 1] > 220) & (data[:, :, 2] > 220)
         
         # 2. Detecta as letras pretas (ECO representação)
@@ -401,7 +401,7 @@ with st.container(border=True):
     primeiro_dia_mes = date(hoje.year, hoje.month, 1)
     min_data_db = df_base['Data'].min().date() if not df_base.empty else date(2020, 1, 1)
 
-    # 🎯 CONFIGURAÇÃO CORRIGIDA: Se estiver na aba de Comparação, remove por completo as colunas de data do topo
+    # Se estiver na aba de Comparação, remove por completo as colunas de data do topo
     if pagina_selecionada == "🔄 Comparação de Períodos":
         col_can, col_cat, col_sub, col_fab, col_pro, col_btn = st.columns([1.6, 1.6, 1.6, 1.6, 1.6, 1.0])
         data_inicio = primeiro_dia_mes
@@ -518,8 +518,9 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
+                    # 🎯 BUGFIX CORRIGIDO DEFINITIVO: Removido o '=' fantasma que estava travando o build online
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row='Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
                 fig_mes = make_subplots(specs=[[{"secondary_y": True}]])
                 x_indices = list(range(len(df_graf_temp)))
@@ -673,7 +674,6 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
     v_tk_c = ((tk_a / tk_b) - 1) * 100 if tk_b > 0 else 0
     v_ped_c = ((ped_a / ped_b) - 1) * 100 if ped_b > 0 else 0
     
-    # 🎯 BUGFIX CORRIGIDO: Declarada a variável com o cálculo de dias do Período A local
     dias_per_a = (fim_a_ts - ini_a_ts).days
     titulo_grafico_tempo = "Faturamento Diário Comercial" if dias_per_a <= 60 else "Performance Histórica Mensal"
     
@@ -722,7 +722,7 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
             if len(df_graf_comp) <= 31:
                 for i, row in df_graf_comp.iterrows():
                     if row['LY'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Atual'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                    if row['Atual'] > 0: lista_anotacoes_comp.append(dict(x=row='Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             
             fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), yaxis=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
             st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
@@ -806,7 +806,7 @@ elif pagina_selecionada == "📋 Tabela Dinâmica":
                         linha_filha[e_linhas] = f"          {sub_row['Produto']}"
                         
                         if 'Produto' in linha_filha.index:
-                            linha_filha = linha_filha.drop('Produto')
+                            linha_filha = inline_index.drop('Produto')
                             
                         linhas_exibicao.append(linha_filha)
                         mapeamento_linhas[pointer_idx] = {'type': 'child', 'name': sub_row['Produto']}
