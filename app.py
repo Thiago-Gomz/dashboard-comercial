@@ -61,7 +61,7 @@ if not st.session_state["autenticado"] and "usr" in st.query_params:
     email_salvo = st.query_params["usr"]
     conn = st.connection("postgresql", type="sql")
     check_df = conn.query("SELECT status FROM usuarios WHERE email = :email", params={"email": email_salvo}, ttl=0)
-    if not check_df.empty and check_df.iloc[0]['status'] == "Ativo":
+    if not check_df.empty && check_df.iloc[0]['status'] == "Ativo":
         st.session_state["autenticado"] = True
         st.session_state["usuario_atual"] = email_salvo
 
@@ -249,7 +249,7 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
     if not df_ly.empty:
         agg_ly = df_ly.groupby(cols_grupo).agg(Vendas_LY=('Total', 'sum'), Itens_LY=('Quantidade', 'sum'), Pedidos_LY=('Ped_Cliente', 'nunique')).reset_index()
     else:
-        agg_ly = pd.DataFrame(columns=cols_grupo + ['Vendas_LY', '賊tens_LY', 'Pedidos_LY'])
+        agg_ly = pd.DataFrame(columns=cols_grupo + ['Vendas_LY', 'Itens_LY', 'Pedidos_LY'])
         
     df_merged = pd.merge(agg_at, agg_ly, on=cols_grupo, how='outer').fillna(0)
     
@@ -346,7 +346,7 @@ def carregar_dados_comerciais():
                 df[col] = df[col].astype(str).replace('R\$', '', regex=True).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
-        # 🎯 NOVO REQUISITO: Força a conversão das colunas de texto para Title Case, limpando vazios e nulos
+        # Força a conversão das colunas de texto para Title Case, limpando vazios e nulos
         for text_col in ['Cliente', 'Categoria', 'Subcategoria', 'Fabricante', 'Produto']:
             if text_col in df.columns:
                 df[text_col] = df[text_col].astype(str).str.strip().str.title().replace({'Nan': None, 'None': None, '': None})
@@ -509,7 +509,6 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
-                    # 🎯 BUGFIX CORRIGIDO ABSOLUTO: Injetada a sintaxe correta 'row['Eixo_X']' limpando o caractere '=' acidental
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
                     if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
@@ -566,21 +565,56 @@ if pagina_selecionada == "🏠 Visão Geral":
             st.plotly_chart(fig_fab, use_container_width=True, config={'displayModeBar': 'hover'})
 
 # ==========================================================
-# 📈 ABA: VENDAS POR MÊS
+# 📈 ABA: VENDAS POR MÊS (PROMOVIDA A DASHBOARD DE SAZONALIDADE)
 # ==========================================================
 elif pagina_selecionada == "📈 Vendas por Mês":
     with st.container(border=True):
         st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>Histórico Comercial Mensal Estruturado</h4></div>", unsafe_allow_html=True)
         if not df_atual.empty and df_atual['Total'].sum() > 0:
-            df_mes_full = df_atual.copy()
-            df_mes_full['Mes_Ano'] = df_mes_full['Data'].dt.strftime('%m/%Y')
-            df_mes_full = df_mes_full.sort_values('Data')
-            df_graf_full = df_mes_full.groupby('Mes_Ano', sort=False)['Total'].sum().reset_index()
-            fig_vendas_full = px.bar(df_graf_full, x='Mes_Ano', y='Total', marker_color='#2563EB')
-            fig_vendas_full.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False), yaxis=dict(title="", showgrid=False, showticklabels=False), height=320, margin=dict(l=15, r=15, t=10, b=40), legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
-            st.plotly_chart(fig_vendas_full, use_container_width=True, config={'displayModeBar': 'hover'})
             
+            # Gera a matriz de dados padrão (essencial para extrair os meses e LY)
             df_matriz_mes = gerar_tabela_analitica_padrao(df_atual, df_ly, 'Mes_Ano', incluir_total=True)
+            df_graf_mes = df_matriz_mes[df_matriz_mes['Mes_Ano'] != "Total Geral"].copy()
+            
+            # 🎯 NOVO REQUISITO: Gráfico de Sazonalidade YoY Mensal Completo
+            if not df_graf_mes.empty:
+                fig_vendas_mes = go.Figure()
+                x_indices = list(range(len(df_graf_mes)))
+                
+                # Barra Ano Atual
+                fig_vendas_mes.add_trace(go.Bar(
+                    x=x_indices, y=df_graf_mes['Vendas'], name='Ano Atual', marker_color='#3B82F6',
+                    customdata=df_graf_mes['Vendas'].apply(formatar_moeda_br_completo),
+                    hovertemplate="<b>Atual:</b> %{customdata}<extra></extra>"
+                ))
+                # Barra Ano Anterior (LY)
+                fig_vendas_mes.add_trace(go.Bar(
+                    x=x_indices, y=df_graf_mes['Vendas LY'], name='Ano Anterior (LY)', marker_color='#F59E0B',
+                    customdata=df_graf_mes['Vendas LY'].apply(formatar_moeda_br_completo),
+                    hovertemplate="<b>LY:</b> %{customdata}<extra></extra>"
+                ))
+                
+                # Injeta rótulos flutuantes compactados idênticos à Home
+                lista_anotacoes_mes = []
+                for idx, row_g in df_graf_mes.iterrows():
+                    i = df_graf_mes.index.get_loc(idx)
+                    if row_g['Vendas LY'] > 0:
+                        lista_anotacoes_mes.append(dict(x=i + 0.20, y=row_g['Vendas LY'], text=formatar_moeda_br(row_g['Vendas LY']), showarrow=False, yshift=6, xanchor='center', yanchor='bottom', font=dict(color='white', size=10, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2))
+                    if row_g['Vendas'] > 0:
+                        lista_anotacoes_mes.append(dict(x=i - 0.20, y=row_g['Vendas'], text=formatar_moeda_br(row_g['Vendas']), showarrow=False, yshift=6, xanchor='center', yanchor='bottom', font=dict(color='white', size=10, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2))
+                
+                max_val_mes = max(df_graf_mes['Vendas'].max(), df_graf_mes['Vendas LY'].max()) if not df_graf_mes.empty else 1
+                fig_vendas_mes.update_layout(
+                    plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11),
+                    xaxis=dict(title="", showgrid=False, tickmode='array', tickvals=x_indices, ticktext=df_graf_mes['Mes_Ano']),
+                    yaxis=dict(title="", showgrid=False, showticklabels=False, range=[0, max_val_mes * 1.25]),
+                    margin=dict(l=15, r=15, t=20, b=40), barmode='group',
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
+                    annotations=lista_anotacoes_mes, height=380
+                )
+                st.plotly_chart(fig_vendas_mes, use_container_width=True, config={'displayModeBar': 'hover'})
+            
+            # Exibe a tabela detalhada logo abaixo do gráfico de performance
             st.dataframe(df_matriz_mes, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_mes, "Mês / Ano"))
 
 # ==========================================================
