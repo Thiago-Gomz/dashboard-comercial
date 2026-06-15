@@ -297,22 +297,23 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
         df_merged = pd.concat([df_merged, pd.DataFrame([total_row])], ignore_index=True)
     return df_merged
 
-# 🎯 CONFIGURAÇÃO GLOBAL DE INTEIROS MUDADO PARA DE EXIBIR 1124 PURO SEM CONFUSÃO COM DECIMAL
+# 🎯 BALIZADO: Retornadas as barras com cores originais, forçando o formato %d para exibir 1124 puro sem vírgulas americanas
 def obter_config_colunas_bi(df, label_principal="Dimensão"):
+    def max_safe(col): return float(df[col].max()) if col in df.columns and df[col].max() > 0 else 1.0
     return {
         df.columns[0]: st.column_config.TextColumn(label_principal, alignment="left"),
-        "Vendas": st.column_config.NumberColumn("Vendas", format="R$ %,.2f"),
-        "Vendas LY": st.column_config.NumberColumn("Vendas LY", format="R$ %,.2f"),
+        "Vendas": st.column_config.ProgressColumn("Vendas", format="R$ %,.2f", min_value=0, max_value=max_safe("Vendas"), color="blue"),
+        "Vendas LY": st.column_config.ProgressColumn("Vendas LY", format="R$ %,.2f", min_value=0, max_value=max_safe("Vendas LY"), color="orange"),
         "Diferença Vendas %": st.column_config.NumberColumn("Diferença Vendas %", format="%,.2f%%"),
-        "% de Participação": st.column_config.NumberColumn("% de Participação", format="%,.2f%%"),
-        "Pedidos": st.column_config.NumberColumn("Pedidos", format="%d"),
-        "Pedidos LY": st.column_config.NumberColumn("Pedidos LY", format="%d"),
+        "% de Participação": st.column_config.ProgressColumn("% de Participação", format="%,.2f%%", min_value=0, max_value=100, color="blue"),
+        "Pedidos": st.column_config.ProgressColumn("Pedidos", format="%d", min_value=0, max_value=max_safe("Pedidos"), color="blue"),
+        "Pedidos LY": st.column_config.ProgressColumn("Pedidos LY", format="%d", min_value=0, max_value=max_safe("Pedidos LY"), color="orange"),
         "Diferença Pedidos %": st.column_config.NumberColumn("Diferença Pedidos %", format="%,.2f%%"),
-        "Qtd de Itens": st.column_config.NumberColumn("Qtd de Itens", format="%d"),
-        "Itens LY": st.column_config.NumberColumn("Itens LY", format="%d"),
+        "Qtd de Itens": st.column_config.ProgressColumn("Qtd de Itens", format="%d", min_value=0, max_value=max_safe("Qtd de Itens"), color="blue"),
+        "Itens LY": st.column_config.ProgressColumn("Itens LY", format="%d", min_value=0, max_value=max_safe("Itens LY"), color="orange"),
         "Diferença Itens %": st.column_config.NumberColumn("Diferença Itens %", format="%,.2f%%"),
-        "Ticket Medio": st.column_config.NumberColumn("Ticket Medio", format="R$ %,.2f"),
-        "Ticket Medio LY": st.column_config.NumberColumn("Ticket Medio LY", format="R$ %,.2f"),
+        "Ticket Medio": st.column_config.ProgressColumn("Ticket Medio", format="R$ %,.2f", min_value=0, max_value=max_safe("Ticket Medio"), color="blue"),
+        "Ticket Medio LY": st.column_config.ProgressColumn("Ticket Medio LY", format="R$ %,.2f", min_value=0, max_value=max_safe("Ticket Medio LY"), color="orange"),
         "Diferença Ticket %": st.column_config.NumberColumn("Diferença Ticket %", format="%,.2f%%"),
     }
 
@@ -377,9 +378,10 @@ st.sidebar.markdown("<h2 style='font-size: 1.25rem; font-weight: 700; margin-bot
 st.sidebar.markdown("<p style='color: #64748B; font-size: 0.8rem; margin-top: 0px;'>Executive Suite v4.0</p>", unsafe_allow_html=True)
 st.sidebar.write("")
 
+# 🎯 ATUALIZAÇÃO: Removido o item "📊 LY" da lista de abas de roteamento
 pagina_selecionada = st.sidebar.radio(
     "",
-    ["🏠 Visão Geral", "📈 Vendas por Mês", "📊 LY", "🔄 Comparação de Períodos", "👥 Cliente", "📦 Categoria", "🏭 Fabricante", "🛒 Produto", "📋 Tabela Dinâmica", "⚙️ Configurações"]
+    ["🏠 Visão Geral", "📈 Vendas por Mês", "🔄 Comparação de Períodos", "👥 Cliente", "📦 Categoria", "🏭 Fabricante", "🛒 Produto", "📋 Tabela Dinâmica", "⚙️ Configurações"]
 )
 st.sidebar.divider()
 
@@ -513,7 +515,6 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
-                    # 🎯 REVISADO E BLINDADO: Sintaxe corrigida de colchetes limpa manualmente nas duas linhas abaixo
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
                     if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
@@ -631,25 +632,8 @@ elif pagina_selecionada == "📈 Vendas por Mês":
                 )
                 st.plotly_chart(fig_vendas_mes, use_container_width=True, config={'displayModeBar': 'hover'})
             
-            # Exibe a tabela detalhada com formatador de inteiros nativos
+            # Exibe a tabela detalhada com as barras coloridas reativadas
             st.dataframe(df_matriz_mes, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_mes, "Mês / Ano"))
-
-# ==========================================================
-# 📊 ABA: LY (ANO ANTERIOR)
-# ==========================================================
-elif pagina_selecionada == "📊 LY":
-    with st.container(border=True):
-        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📊</div><h4 class='chart-title-text'>Análise de Performance Base - Período Anterior (LY)</h4></div>", unsafe_allow_html=True)
-        if not df_ly.empty:
-            df_ly_chart = df_ly.groupby('Categoria').agg(Vendas=('Total','sum')).reset_index().sort_values(by='Vendas', ascending=False)
-            fig_ly = px.bar(df_ly_chart, x='Categoria', y='Vendas', color_discrete_sequence=['#F59E0B'])
-            fig_ly.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title=""), yaxis=dict(title="", showgrid=True, gridcolor='#1E293B'), height=300, margin=dict(l=15, r=15, t=10, b=40), legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
-            st.plotly_chart(fig_ly, use_container_width=True, config={'displayModeBar': 'hover'})
-            
-            df_matriz_ly = gerar_tabela_analitica_padrao(df_ly, df_ly, 'Categoria', incluir_total=True)
-            st.dataframe(df_matriz_ly[['Categoria', 'Vendas', 'Pedidos', 'Qtd de Itens']], use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_ly, "Categoria"))
-        else:
-            st.info("Nenhum histórico localizado no período homólogo do ano anterior (LY).")
 
 # ==========================================================
 # 🔄 COMPARAÇÃO DE PERÍODOS
