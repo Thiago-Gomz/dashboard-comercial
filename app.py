@@ -236,7 +236,6 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
     total_faturamento_atual = df_at['Total'].sum()
     cols_grupo = [coluna_grupo] if isinstance(coluna_grupo, str) else coluna_grupo
     
-    # Cria a coluna Mes_Ano estruturada para os dados atuais prevenindo o KeyError
     df_at_copy = df_at.copy()
     if 'Mes_Ano' in cols_grupo and not df_at_copy.empty:
         df_at_copy['Mes_Ano'] = df_at_copy['Data'].dt.strftime('%m/%Y')
@@ -298,22 +297,22 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
         df_merged = pd.concat([df_merged, pd.DataFrame([total_row])], ignore_index=True)
     return df_merged
 
+# 🎯 CONFIGURAÇÃO GLOBAL DE INTEIROS MUDADO PARA DE EXIBIR 1124 PURO SEM CONFUSÃO COM DECIMAL
 def obter_config_colunas_bi(df, label_principal="Dimensão"):
-    def max_safe(col): return float(df[col].max()) if col in df.columns and df[col].max() > 0 else 1.0
     return {
         df.columns[0]: st.column_config.TextColumn(label_principal, alignment="left"),
-        "Vendas": st.column_config.ProgressColumn("Vendas", format="R$ %,.2f", min_value=0, max_value=max_safe("Vendas"), color="blue"),
-        "Vendas LY": st.column_config.ProgressColumn("Vendas LY", format="R$ %,.2f", min_value=0, max_value=max_safe("Vendas LY"), color="orange"),
+        "Vendas": st.column_config.NumberColumn("Vendas", format="R$ %,.2f"),
+        "Vendas LY": st.column_config.NumberColumn("Vendas LY", format="R$ %,.2f"),
         "Diferença Vendas %": st.column_config.NumberColumn("Diferença Vendas %", format="%,.2f%%"),
-        "% de Participação": st.column_config.ProgressColumn("% de Participação", format="%,.2f%%", min_value=0, max_value=100, color="blue"),
-        "Pedidos": st.column_config.ProgressColumn("Pedidos", format="%,.0f", min_value=0, max_value=max_safe("Pedidos"), color="blue"),
-        "Pedidos LY": st.column_config.ProgressColumn("Pedidos LY", format="%,.0f", min_value=0, max_value=max_safe("Pedidos LY"), color="orange"),
+        "% de Participação": st.column_config.NumberColumn("% de Participação", format="%,.2f%%"),
+        "Pedidos": st.column_config.NumberColumn("Pedidos", format="%d"),
+        "Pedidos LY": st.column_config.NumberColumn("Pedidos LY", format="%d"),
         "Diferença Pedidos %": st.column_config.NumberColumn("Diferença Pedidos %", format="%,.2f%%"),
-        "Qtd de Itens": st.column_config.ProgressColumn("Qtd de Itens", format="%,.0f", min_value=0, max_value=max_safe("Qtd de Itens"), color="blue"),
-        "Itens LY": st.column_config.ProgressColumn("Itens LY", format="%,.0f", min_value=0, max_value=max_safe("Itens LY"), color="orange"),
+        "Qtd de Itens": st.column_config.NumberColumn("Qtd de Itens", format="%d"),
+        "Itens LY": st.column_config.NumberColumn("Itens LY", format="%d"),
         "Diferença Itens %": st.column_config.NumberColumn("Diferença Itens %", format="%,.2f%%"),
-        "Ticket Medio": st.column_config.ProgressColumn("Ticket Medio", format="R$ %,.2f", min_value=0, max_value=max_safe("Ticket Medio"), color="blue"),
-        "Ticket Medio LY": st.column_config.ProgressColumn("Ticket Medio LY", format="R$ %,.2f", min_value=0, max_value=max_safe("Ticket Medio LY"), color="orange"),
+        "Ticket Medio": st.column_config.NumberColumn("Ticket Medio", format="R$ %,.2f"),
+        "Ticket Medio LY": st.column_config.NumberColumn("Ticket Medio LY", format="R$ %,.2f"),
         "Diferença Ticket %": st.column_config.NumberColumn("Diferença Ticket %", format="%,.2f%%"),
     }
 
@@ -416,7 +415,6 @@ with st.container(border=True):
     with col_per_ini: data_inicio = st.date_input("Data Inicial", value=data_inicial_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
     with col_per_fim: data_fim = st.date_input("Data Final", value=data_final_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
         
-    # Limpeza absoluta do bloco de filtros
     with col_can: canais = st.multiselect("Cliente", options=df_base['Cliente'].dropna().unique(), placeholder="Todos")
     with col_cat: categorias = st.multiselect("Categoria", options=df_base['Categoria'].dropna().unique(), placeholder="Todas")
     with col_sub: subcategorias = st.multiselect("Subcategoria", options=df_base['Subcategoria'].dropna().unique(), placeholder="Todas")
@@ -515,7 +513,7 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
-                    # 🎯 REVISADO E BLINDADO: Sintaxe corrigida de colchetes limpa manualmente
+                    # 🎯 REVISADO E BLINDADO: Sintaxe corrigida de colchetes limpa manualmente nas duas linhas abaixo
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
                     if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
@@ -583,9 +581,9 @@ elif pagina_selecionada == "📈 Vendas por Mês":
             df_matriz_mes = gerar_tabela_analitica_padrao(df_atual, df_ly, 'Mes_Ano', incluir_total=True)
             df_graf_mes = df_matriz_mes[df_matriz_mes['Mes_Ano'] != "Total Geral"].copy()
             
-            # Gráfico de Sazonalidade YoY Mensal Completo
+            # 🎯 ATUALIZAÇÃO: Gráfico promovido para Eixo Duplo YoY com a linha de Diferença Vendas % integrada!
             if not df_graf_mes.empty:
-                fig_vendas_mes = go.Figure()
+                fig_vendas_mes = make_subplots(specs=[[{"secondary_y": True}]])
                 x_indices = list(range(len(df_graf_mes)))
                 
                 # Barra Ano Atual
@@ -593,15 +591,24 @@ elif pagina_selecionada == "📈 Vendas por Mês":
                     x=x_indices, y=df_graf_mes['Vendas'], name='Ano Atual', marker_color='#3B82F6',
                     customdata=df_graf_mes['Vendas'].apply(formatar_moeda_br_completo),
                     hovertemplate="<b>Atual:</b> %{customdata}<extra></extra>"
-                ))
+                ), secondary_y=False)
+                
                 # Barra Ano Anterior (LY)
                 fig_vendas_mes.add_trace(go.Bar(
                     x=x_indices, y=df_graf_mes['Vendas LY'], name='Ano Anterior (LY)', marker_color='#F59E0B',
                     customdata=df_graf_mes['Vendas LY'].apply(formatar_moeda_br_completo),
                     hovertemplate="<b>LY:</b> %{customdata}<extra></extra>"
-                ))
+                ), secondary_y=False)
                 
-                # Injeta rótulos flutuantes compactados idênticos à Home
+                # Linha de Crescimento Percentual YoY (Eixo Secundário)
+                fig_vendas_mes.add_trace(go.Scatter(
+                    x=x_indices, y=df_graf_mes['Diferença Vendas %'], name='Diferença %', mode='lines+markers',
+                    line=dict(color='#64748B', width=2), marker=dict(size=6),
+                    customdata=df_graf_mes['Diferença Vendas %'].apply(lambda x: f"{x:+.1f}%".replace('.', ',')),
+                    hovertemplate="<b>Cresc:</b> %{customdata}<extra></extra>"
+                ), secondary_y=True)
+                
+                # Injeta rótulos flutuantes compactados de faturamento e porcentagem
                 lista_anotacoes_mes = []
                 for idx, row_g in df_graf_mes.iterrows():
                     i = df_graf_mes.index.get_loc(idx)
@@ -609,19 +616,22 @@ elif pagina_selecionada == "📈 Vendas por Mês":
                         lista_anotacoes_mes.append(dict(x=i + 0.20, y=row_g['Vendas LY'], text=formatar_moeda_br(row_g['Vendas LY']), showarrow=False, yshift=6, xanchor='center', yanchor='bottom', font=dict(color='white', size=10, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2))
                     if row_g['Vendas'] > 0:
                         lista_anotacoes_mes.append(dict(x=i - 0.20, y=row_g['Vendas'], text=formatar_moeda_br(row_g['Vendas']), showarrow=False, yshift=6, xanchor='center', yanchor='bottom', font=dict(color='white', size=10, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2))
+                    # Rótulo de Porcentagem (Y2)
+                    lista_anotacoes_mes.append(dict(x=i, y=row_g['Diferença Vendas %'], text=f"{row_g['Diferença Vendas %']:+.1f}%".replace('.', ','), showarrow=False, yshift=14, xanchor='center', yanchor='bottom', font=dict(color='white', size=10, family='Inter', weight='bold'), bgcolor='#1E293B', borderpad=3, xref="x", yref="y2"))
                 
                 max_val_mes = max(df_graf_mes['Vendas'].max(), df_graf_mes['Vendas LY'].max()) if not df_graf_mes.empty else 1
                 fig_vendas_mes.update_layout(
                     plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11),
                     xaxis=dict(title="", showgrid=False, tickmode='array', tickvals=x_indices, ticktext=df_graf_mes['Mes_Ano']),
                     yaxis=dict(title="", showgrid=False, showticklabels=False, range=[0, max_val_mes * 1.25]),
+                    yaxis2=dict(title="", showgrid=False, showticklabels=False),
                     margin=dict(l=15, r=15, t=20, b=40), barmode='group',
                     legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
-                    annotations=lista_anotacoes_mes, height=380
+                    annotations=lista_anotacoes_mes, height=420
                 )
                 st.plotly_chart(fig_vendas_mes, use_container_width=True, config={'displayModeBar': 'hover'})
             
-            # Exibe a tabela detalhada logo abaixo do gráfico de performance
+            # Exibe a tabela detalhada com formatador de inteiros nativos
             st.dataframe(df_matriz_mes, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_mes, "Mês / Ano"))
 
 # ==========================================================
