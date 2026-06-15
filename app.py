@@ -297,7 +297,6 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
         df_merged = pd.concat([df_merged, pd.DataFrame([total_row])], ignore_index=True)
     return df_merged
 
-# CONFIGURAÇÃO GLOBAL DE INTEIROS MUDADO PARA DE EXIBIR 1124 PURO SEM CONFUSÃO COM DECIMAL
 def obter_config_colunas_bi(df, label_principal="Dimensão"):
     def max_safe(col): return float(df[col].max()) if col in df.columns and df[col].max() > 0 else 1.0
     return {
@@ -378,7 +377,6 @@ st.sidebar.markdown("<h2 style='font-size: 1.25rem; font-weight: 700; margin-bot
 st.sidebar.markdown("<p style='color: #64748B; font-size: 0.8rem; margin-top: 0px;'>Executive Suite v4.0</p>", unsafe_allow_html=True)
 st.sidebar.write("")
 
-# REMOVIDO EM DEFINITIVO O MÓDULO LY CONFORME SOLICITADO
 pagina_selecionada = st.sidebar.radio(
     "",
     ["🏠 Visão Geral", "📈 Vendas por Mês", "🔄 Comparação de Períodos", "👥 Cliente", "📦 Categoria", "🏭 Fabricante", "🛒 Produto", "📋 Tabela Dinâmica", "⚙️ Configurações"]
@@ -467,7 +465,7 @@ v_ped_str = f"{v_ped:+.1f}%".replace('.', ',')
 # ==========================================================
 # 🎯 KPIS GLOBAIS (EXIBIDOS EM TODAS AS ABAS, EXCETO CONFIGURAÇÕES)
 # ==========================================================
-if pagina_selecionada != "⚙️ Configurações":
+if pagina_selecionada != "⚙️ Configurações" and pagina_selecionada != "🔄 Comparação de Períodos":
     k1, k2, k3, k4 = st.columns(4)
     with k1: st.markdown(f"<div class='kpi-card blue-accent'><div class='kpi-title'>Qtd de Itens</div><div class='kpi-value'>{qtd_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_qtd >= 0 else 'badge-negative'}'>{v_qtd_str}</span><span class='kpi-ly-text'>vs LY ({f'{qtd_ly:.0f}'})</span></div></div>", unsafe_allow_html=True)
     with k2: st.markdown(f"<div class='kpi-card emerald-accent'><div class='kpi-title'>Ticket Médio</div><div class='kpi-value'>{tk_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_tk >= 0 else 'badge-negative'}'>{v_tk_str}</span><span class='kpi-ly-text'>vs LY ({formatar_moeda_br(tk_ly)})</span></div></div>", unsafe_allow_html=True)
@@ -553,7 +551,7 @@ if pagina_selecionada == "🏠 Visão Geral":
             if not df_atual.empty and df_atual['Total'].sum() > 0:
                 df_graf_cat = df_atual.groupby('Categoria')['Total'].sum().reset_index().sort_values(by='Total', ascending=False)
                 fig_cat = px.bar(df_graf_cat, x='Categoria', y='Total', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
-                for idx, row in df_cat.iterrows():
+                for idx, row in df_graf_cat.iterrows():
                     fig_cat.add_annotation(dict(x=row['Categoria'], y=row['Total'], text=formatar_moeda_br(row['Total']), showarrow=False, yshift=6, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='bottom', xanchor='center'))
                 fig_cat.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False), yaxis=dict(title="", showgrid=False, showticklabels=False, range=[0, df_graf_cat['Total'].max() * 1.25]), margin=dict(l=15, r=15, t=10, b=40), coloraxis_showscale=False, height=350, legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
                 st.plotly_chart(fig_cat, use_container_width=True, config={'displayModeBar': 'hover'})
@@ -636,71 +634,96 @@ elif pagina_selecionada == "📈 Vendas por Mês":
             st.dataframe(df_matriz_mes, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_mes, "Mês / Ano"))
 
 # ==========================================================
-# 🎯 🔄 COMPARAÇÃO DE PERÍODOS (NOVA ESTRUTURA REQUISITADA)
+# 🎯 🔄 COMPARAÇÃO DE PERÍODOS (DATA A VS DATA B REAL)
 # ==========================================================
 elif pagina_selecionada == "🔄 Comparação de Períodos":
-    # 1. Gráfico de Cockpit Temporal (Atual vs LY) herdado da Visão Geral
+    st.markdown("<h3 style='margin-top:0px; font-weight:700; color:#F8FAFC;'>Cruzamento Estratégico de Períodos Dinâmicos</h3>", unsafe_allow_html=True)
+    
+    # Bloco autônomo de sub-filtros de data (Data A vs Data B)
     with st.container(border=True):
-        titulo_grafico_tempo = "Faturamento Diário Comercial" if dias_selecionados <= 60 else "Performance Histórica Mensal"
-        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>{titulo_grafico_tempo} (Atual vs LY)</h4></div>", unsafe_allow_html=True)
+        c_a1, c_a2, c_b1, c_b2 = st.columns(4)
+        with c_a1: data_a_ini = st.date_input("Período A - Início", value=data_inicio, format="DD/MM/YYYY")
+        with c_a2: data_a_fim = st.date_input("Período A - Fim", value=data_fim, format="DD/MM/YYYY")
+        with c_b1: data_b_ini = st.date_input("Período B - Início", value=data_inicio - relativedelta(months=1), format="DD/MM/YYYY")
+        with c_b2: data_b_fim = st.date_input("Período B - Fim", value=data_fim - relativedelta(months=1), format="DD/MM/YYYY")
+            
+    ini_a_ts, fim_a_ts = pd.to_datetime(data_a_ini), pd.to_datetime(data_a_fim)
+    ini_b_ts, fim_b_ts = pd.to_datetime(data_b_ini), pd.to_datetime(data_b_fim)
+    
+    # Separação estrita dos dataframes na memória
+    df_per_a = df_filtrado_geral[(df_filtrado_geral['Data'] >= ini_a_ts) & (df_filtrado_geral['Data'] <= fim_a_ts)]
+    df_per_b = df_filtrado_geral[(df_filtrado_geral['Data'] >= ini_b_ts) & (df_filtrado_geral['Data'] <= fim_b_ts)]
+    
+    # Cálculo das métricas locais para os cards dinâmicos
+    fat_a, qtd_a = df_per_a['Total'].sum(), df_per_a['Quantidade'].sum()
+    tk_a = fat_a / qtd_a if qtd_a > 0 else 0
+    ped_a = df_per_a['Ped_Cliente'].nunique()
+
+    fat_b, qtd_b = df_per_b['Total'].sum(), df_per_b['Quantidade'].sum()
+    tk_b = fat_b / qtd_b if qtd_b > 0 else 0
+    ped_b = df_per_b['Ped_Cliente'].nunique()
+
+    v_fat_c = ((fat_a / fat_b) - 1) * 100 if fat_b > 0 else 0
+    v_qtd_c = ((qtd_a / qtd_b) - 1) * 100 if qtd_b > 0 else 0
+    v_tk_c = ((tk_a / tk_b) - 1) * 100 if tk_b > 0 else 0
+    v_ped_c = ((ped_a / ped_b) - 1) * 100 if ped_b > 0 else 0
+    
+    # Renderização do Cockpit de Cards Locais YoY
+    kc1, kc2, kc3, kc4 = st.columns(4)
+    with kc1: st.markdown(f"<div class='kpi-card blue-accent'><div class='kpi-title'>Qtd de Itens (A)</div><div class='kpi-value'>{qtd_a:.0f}</div><div class='kpi-footer'><span class='{'badge-positive' if v_qtd_c >= 0 else 'badge-negative'}'>{v_qtd_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({qtd_b:.0f})</span></div></div>", unsafe_allow_html=True)
+    with kc2: st.markdown(f"<div class='kpi-card emerald-accent'><div class='kpi-title'>Ticket Médio (A)</div><div class='kpi-value'>{formatar_moeda_br_completo(tk_a)}</div><div class='kpi-footer'><span class='{'badge-positive' if v_tk_c >= 0 else 'badge-negative'}'>{v_tk_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({formatar_moeda_br(tk_b)})</span></div></div>", unsafe_allow_html=True)
+    with kc3: st.markdown(f"<div class='kpi-card orange-accent'><div class='kpi-title'>Pedidos (A)</div><div class='kpi-value'>{ped_a:.0f}</div><div class='kpi-footer'><span class='{'badge-positive' if v_ped_c >= 0 else 'badge-negative'}'>{v_ped_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({ped_b:.0f})</span></div></div>", unsafe_allow_html=True)
+    with kc4: st.markdown(f"<div class='kpi-card purple-accent'><div class='kpi-title'>Vendas (A)</div><div class='kpi-value'>{formatar_moeda_br(fat_a)}</div><div class='kpi-footer'><span class='{'badge-positive' if v_fat_c >= 0 else 'badge-negative'}'>{v_fat_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({formatar_moeda_br(fat_b)})</span></div></div>", unsafe_allow_html=True)
+    st.write("\n")
+
+    # Gráfico Diário de Cockpit Espelhado por Dia Relativo do Período
+    with st.container(border=True):
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>Performance Comparativa (Linha do Tempo: Dia a Dia dos Períodos)</h4></div>", unsafe_allow_html=True)
         
-        df_g_atual = pd.DataFrame(columns=['Eixo_X', 'Atual'])
-        if not df_atual.empty:
-            df_t_atual = df_atual.copy().sort_values('Data')
-            df_t_atual['Eixo_X'] = df_t_atual['Data'].dt.strftime(formato_data)
-            df_g_atual = df_t_atual.groupby('Eixo_X', sort=False)['Total'].sum().reset_index().rename(columns={'Total': 'Atual'})
+        df_g_a = pd.DataFrame(columns=['Dia_Num', 'Atual'])
+        if not df_per_a.empty:
+            df_t_a = df_per_a.copy().sort_values('Data')
+            df_t_a['Dia_Num'] = (df_t_a['Data'] - df_t_a['Data'].min()).dt.days + 1
+            df_g_a = df_t_a.groupby('Dia_Num')['Total'].sum().reset_index().rename(columns={'Total': 'Atual'})
             
-        df_g_ly = pd.DataFrame(columns=['Eixo_X', 'LY'])
-        if not df_ly.empty:
-            df_t_ly = df_ly.copy()
-            df_t_ly['Data_Shifted'] = df_t_ly['Data'].apply(lambda x: x + relativedelta(years=1))
-            df_t_ly = df_t_ly.sort_values('Data_Shifted')
-            df_t_ly['Eixo_X'] = df_t_ly['Data_Shifted'].dt.strftime(formato_data)
-            df_g_ly = df_t_ly.groupby('Eixo_X', sort=False)['Total'].sum().reset_index().rename(columns={'Total': 'LY'})
+        df_g_b = pd.DataFrame(columns=['Dia_Num', 'LY'])
+        if not df_per_b.empty:
+            df_t_b = df_per_b.copy().sort_values('Data')
+            df_t_b['Dia_Num'] = (df_t_b['Data'] - df_t_b['Data'].min()).dt.days + 1
+            df_g_b = df_t_b.groupby('Dia_Num')['Total'].sum().reset_index().rename(columns={'Total': 'LY'})
+            
+        if not df_g_a.empty or not df_g_b.empty:
+            df_graf_comp = pd.merge(df_g_a, df_g_b, on='Dia_Num', how='outer').fillna(0).sort_values('Dia_Num')
+            df_graf_comp['Eixo_X'] = df_graf_comp['Dia_Num'].apply(lambda x: f"Dia {x}")
+            df_graf_comp['Var_Perc'] = df_graf_comp.apply(lambda r: ((r['Atual'] / r['LY']) - 1) * 100 if r['LY'] > 0 else (100 if r['Atual'] > 0 else 0), axis=1)
+            
+            df_graf_comp['Texto_Atual'] = df_graf_comp['Atual'].apply(formatar_moeda_br)
+            df_graf_comp['Texto_LY'] = df_graf_comp['LY'].apply(formatar_moeda_br)
+            df_graf_comp['Texto_Var'] = df_graf_comp['Var_Perc'].apply(lambda x: f"{x:+.1f}%".replace('.', ','))
+            df_graf_comp['Hover_Atual'] = df_graf_comp['Atual'].apply(formatar_moeda_br_completo)
+            df_graf_comp['Hover_LY'] = df_graf_comp['LY'].apply(formatar_moeda_br_completo)
+            
+            lista_anotacoes_comp = []
+            max_global_val = max(df_graf_comp['Atual'].max(), df_graf_comp['LY'].max()) if not df_graf_comp.empty else 1
+            
+            fig_comp_dates = go.Figure()
+            fig_comp_dates.add_trace(go.Scatter(x=df_graf_comp['Eixo_X'], y=df_graf_comp['LY'], name='Período B', mode='lines+markers', line=dict(color='#F59E0B', width=2, shape='spline'), fill='tozeroy', fillcolor='rgba(245, 158, 11, 0.02)', marker=dict(color='#F59E0B', size=4), customdata=df_graf_comp['Hover_LY'], hovertemplate="<b>Período B:</b> %{customdata}<extra></extra>"))
+            fig_comp_dates.add_trace(go.Scatter(x=df_graf_comp['Eixo_X'], y=df_graf_comp['Atual'], name='Período A', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_comp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Período A:</b> %{customdata[0]}<br><b>Var:</b> %{customdata[1]}<extra></extra>"))
+            
+            if len(df_graf_comp) <= 31:
+                for i, row in df_graf_comp.iterrows():
+                    if row['LY'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
+                    if row['Atual'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+            
+            fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), yaxis=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
+            st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
 
-        if not df_g_atual.empty or not df_g_ly.empty:
-            df_graf_temp = pd.merge(df_g_atual, df_g_ly, on='Eixo_X', how='outer').fillna(0)
-            df_graf_temp['Var_Perc'] = df_graf_temp.apply(lambda r: ((r['Atual'] / r['LY']) - 1) * 100 if r['LY'] > 0 else (100 if r['Atual'] > 0 else 0), axis=1)
-            df_graf_temp['Texto_Atual'] = df_graf_temp['Atual'].apply(formatar_moeda_br)
-            df_graf_temp['Texto_LY'] = df_graf_temp['LY'].apply(formatar_moeda_br)
-            df_graf_temp['Texto_Var'] = df_graf_temp['Var_Perc'].apply(lambda x: f"{x:+.1f}%".replace('.', ','))
-            df_graf_temp['Hover_Atual'] = df_graf_temp['Atual'].apply(formatar_moeda_br_completo)
-            df_graf_temp['Hover_LY'] = df_graf_temp['LY'].apply(formatar_moeda_br_completo)
-            
-            lista_anotacoes = []
-            max_global_val = max(df_graf_temp['Atual'].max(), df_graf_temp['LY'].max())
-            
-            if dias_selecionados <= 60:
-                fig_mes = go.Figure()
-                fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['LY'], name='Ano Anterior (LY)', mode='lines+markers', line=dict(color='#F59E0B', width=2, shape='spline'), fill='tozeroy', fillcolor='rgba(245, 158, 11, 0.02)', marker=dict(color='#F59E0B', size=4), customdata=df_graf_temp['Hover_LY'], hovertemplate="<b>LY:</b> %{customdata}<extra></extra>"))
-                fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
-                
-                for i, row in df_graf_temp.iterrows():
-                    if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
-            else:
-                fig_mes = make_subplots(specs=[[{"secondary_y": True}]])
-                x_indices = list(range(len(df_graf_temp)))
-                fig_mes.add_trace(go.Bar(x=x_indices, y=df_graf_temp['Atual'], name='Ano Atual', marker_color='#3B82F6', customdata=df_graf_temp['Hover_Atual'], hovertemplate="<b>Atual:</b> %{customdata}<extra></extra>"), secondary_y=False)
-                fig_mes.add_trace(go.Bar(x=x_indices, y=df_graf_temp['LY'], name='Ano Anterior (LY)', marker_color='#F59E0B', customdata=df_graf_temp['Hover_LY'], hovertemplate="<b>LY:</b> %{customdata}<extra></extra>"), secondary_y=False)
-                fig_mes.add_trace(go.Scatter(x=x_indices, y=df_graf_temp['Var_Perc'], name='Crescimento %', mode='lines+markers', line=dict(color='#64748B', width=2), marker=dict(size=5), customdata=df_graf_temp['Texto_Var'], hovertemplate="<b>Cresc:</b> %{customdata}<extra></extra>"), secondary_y=True)
-                
-                for i, row in df_graf_temp.iterrows():
-                    if row['LY'] > 0: lista_anotacoes.append(dict(x=i + 0.20, y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=6, xanchor='center', yanchor='bottom', font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=3))
-                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=i - 0.20, y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=6, xanchor='center', yanchor='bottom', font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=3))
-                    lista_anotacoes.append(dict(x=i, y=row['Var_Perc'], text=row['Texto_Var'], showarrow=False, yshift=16, xanchor='center', yanchor='bottom', font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#1E293B', borderpad=3.5, xref="x", yref="y2"))
-                
-                fig_mes.update_layout(xaxis=dict(title="", showgrid=False, tickmode='array', tickvals=x_indices, ticktext=df_graf_temp['Eixo_X']), yaxis=dict(range=[0, max_global_val * 1.30]))
-            
-            fig_mes.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), yaxis=dict(title="", showgrid=False, showticklabels=False), yaxis2=dict(title="", showgrid=False, showticklabels=False) if dias_selecionados > 60 else None, margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes, height=420)
-            st.plotly_chart(fig_mes, use_container_width=True, config={'displayModeBar': 'hover'})
-
-    # 2. Tabela Dinâmica Multi-Nível Expandível integrada com a folha de estilo colorida
+    # Tabela Dinâmica Multi-Nível Expandível Adaptada Autônoma
     with st.container(border=True):
-        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📋</div><h4 class='chart-title-text'>Matriz Dinâmica de Comparação de Períodos</h4></div>", unsafe_allow_html=True)
-        e_linhas_comp = st.selectbox("Selecionar Dimensão de Comparação", options=["Cliente", "Categoria", "Subcategoria", "Fabricante"], key="selectbox_comp_periodos")
-        if not df_atual.empty or not df_ly.empty:
-            df_matriz_macro = gerar_tabela_analitica_padrao(df_atual, df_ly, e_linhas_comp, incluir_total=False).sort_values(by='Vendas', ascending=False)
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📋</div><h4 class='chart-title-text'>Matriz Dinâmica Executiva: Período A vs Período B</h4></div>", unsafe_allow_html=True)
+        e_linhas_comp = st.selectbox("Selecionar Tabela de Comparação", options=["Cliente", "Categoria", "Subcategoria", "Fabricante"], key="selectbox_comp_periodos_dinamico")
+        if not df_per_a.empty or not df_per_b.empty:
+            df_matriz_macro = gerar_tabela_analitica_padrao(df_per_a, df_per_b, e_linhas_comp, incluir_total=False).sort_values(by='Vendas', ascending=False)
             linhas_exibicao, mapeamento_linhas, ponteiro_indice = [], {}, 0
             
             for _, row in df_matriz_macro.iterrows():
@@ -713,13 +736,13 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
                 ponteiro_indice += 1
                 
                 if esta_expandido:
-                    df_matriz_sub = gerar_tabela_analitica_padrao(df_atual[df_atual[e_linhas_comp] == item_nome], df_ly[df_ly[e_linhas_comp] == item_nome], 'Produto', incluir_total=False).sort_values(by='Vendas', ascending=False)
+                    df_matriz_sub = gerar_tabela_analitica_padrao(df_per_a[df_per_a[e_linhas_comp] == item_nome], df_per_b[df_per_b[e_linhas_comp] == item_nome], 'Produto', incluir_total=False).sort_values(by='Vendas', ascending=False)
                     for _, sub_row in df_matriz_sub.iterrows():
                         linha_filha = sub_row.copy()
                         linha_filha[e_linhas_comp] = f"          {sub_row['Produto']}"
                         
-                        if 'Produto' in linha_filha.index:
-                            linha_filha = linha_filha.drop('Produto')
+                        if 'Produto' in inline_index := linha_filha.index:
+                            if 'Produto' in inline_index: linha_filha = linha_filha.drop('Produto')
                             
                         linhas_exibicao.append(linha_filha)
                         mapeamento_linhas[ponteiro_indice] = {'type': 'child', 'name': sub_row['Produto']}
@@ -727,11 +750,16 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
                         
             df_final_display = pd.DataFrame(linhas_exibicao) if linhas_exibicao else pd.DataFrame(columns=df_matriz_macro.columns)
             if not df_final_display.empty:
-                df_total_geral_row = gerar_tabela_analitica_padrao(df_atual, df_ly, e_linhas_comp, incluir_total=True).tail(1).copy()
+                df_total_geral_row = gerar_tabela_analitica_padrao(df_per_a, df_per_b, e_linhas_comp, incluir_total=True).tail(1).copy()
                 df_total_geral_row[e_linhas_comp] = "Total Geral"
                 df_final_display = pd.concat([df_final_display, df_total_geral_row], ignore_index=True)
-                
-            selecao = st.dataframe(df_final_display, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_final_display, e_linhas_comp), on_select="rerun", selection_mode="single-row", key=f"pivot_comp_{st.session_state['df_key_counter']}")
+            
+            # Altera cirurgicamente os rótulos das barras de progresso locais
+            config_custom_per = obter_config_colunas_bi(df_final_display, e_linhas_comp)
+            config_custom_per["Vendas"] = st.column_config.ProgressColumn("Vendas Período A", format="R$ %,.2f", min_value=0, max_value=float(df_final_display["Vendas"].max()) if "Vendas" in df_final_display.columns else 1.0, color="blue")
+            config_custom_per["Vendas LY"] = st.column_config.ProgressColumn("Vendas Período B", format="R$ %,.2f", min_value=0, max_value=float(df_final_display["Vendas LY"].max()) if "Vendas LY" in df_final_display.columns else 1.0, color="orange")
+            
+            selecao = st.dataframe(df_final_display, use_container_width=True, hide_index=True, column_config=config_custom_per, on_select="rerun", selection_mode="single-row", key=f"pivot_comp_dates_{st.session_state['df_key_counter']}")
             rows_selecionadas = selecao.selection.get("rows", []) if selecao else []
             if rows_selecionadas:
                 meta_linha = mapeamento_linhas.get(rows_selecionadas[0])
@@ -740,82 +768,8 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
                     else: st.session_state['expanded_items'].add(meta_linha['name'])
                     st.session_state['df_key_counter'] += 1
                     st.rerun()
-
-# ==========================================================
-# ABAS DIMENSIONAIS DIRETAS
-# ==========================================================
-elif pagina_selecionada in ["👥 Cliente", "📦 Categoria", "🏭 Fabricante", "🛒 Produto"]:
-    mapeamento_abas = {"👥 Cliente": "Cliente", "📦 Categoria": "Categoria", "🏭 Fabricante": "Fabricante", "🛒 Produto": "Produto"}
-    entidade_foco = mapeamento_abas[pagina_selecionada]
-    
-    with st.container(border=True):
-        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>🎯</div><h4 class='chart-title-text'>Visão Executiva de Performance por {entidade_foco}</h4></div>", unsafe_allow_html=True)
-        df_ranking = df_atual.groupby(entidade_foco)['Total'].sum().reset_index().sort_values(by='Total', ascending=True).tail(8)
-        fig_drill = px.bar(df_ranking, x='Total', y=entidade_foco, orientation='h', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
-        fig_drill.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#E5E7EB', xaxis=dict(showgrid=False, showticklabels=False), yaxis=dict(showgrid=False), coloraxis_showscale=False, height=320, margin=dict(l=15, r=15, t=10, b=40), legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
-        st.plotly_chart(fig_drill, use_container_width=True, config={'displayModeBar': 'hover'})
-        
-        df_matriz_dinamica = gerar_tabela_analitica_padrao(df_atual, df_ly, coluna_grupo=entidade_foco, incluir_total=True).sort_values(by='Vendas', ascending=False)
-        st.dataframe(df_matriz_dinamica, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_dinamica, label_principal=entidade_foco))
 
 # ==========================================================
 # 📋 TABELA DINÂMICA
 # ==========================================================
 elif pagina_selecionada == "📋 Tabela Dinâmica":
-    with st.container(border=True):
-        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📋</div><h4 class='chart-title-text'>Tabelas</h4></div>", unsafe_allow_html=True)
-        e_linhas = st.selectbox("Selecionar Tabela", options=["Cliente", "Categoria", "Subcategoria", "Fabricante"])
-        if not df_atual.empty or not df_ly.empty:
-            df_matriz_macro = gerar_tabela_analitica_padrao(df_atual, df_ly, e_linhas, incluir_total=False).sort_values(by='Vendas', ascending=False)
-            linhas_exibicao, mapeamento_linhas, ponteiro_indice = [], {}, 0
-            
-            for _, row in df_matriz_macro.iterrows():
-                item_nome = row[e_linhas]
-                esta_expandido = item_nome in st.session_state['expanded_items']
-                linha_mestre = row.copy()
-                linha_mestre[e_linhas] = f"   -   {item_nome}" if esta_expandido else f"   +   {item_nome}"
-                linhas_exibicao.append(linha_mestre)
-                mapeamento_linhas[ponteiro_indice] = {'type': 'master', 'name': item_nome}
-                ponteiro_indice += 1
-                
-                if esta_expandido:
-                    df_matriz_sub = gerar_tabela_analitica_padrao(df_atual[df_atual[e_linhas] == item_nome], df_ly[df_ly[e_linhas] == item_nome], 'Produto', incluir_total=False).sort_values(by='Vendas', ascending=False)
-                    for _, sub_row in df_matriz_sub.iterrows():
-                        linha_filha = sub_row.copy()
-                        linha_filha[e_linhas] = f"          {sub_row['Produto']}"
-                        
-                        if 'Produto' in linha_filha.index:
-                            linha_filha = linha_filha.drop('Produto')
-                            
-                        linhas_exibicao.append(linha_filha)
-                        mapeamento_linhas[ponteiro_indice] = {'type': 'child', 'name': sub_row['Produto']}
-                        ponteiro_indice += 1
-                        
-            df_final_display = pd.DataFrame(linhas_exibicao) if linhas_exibicao else pd.DataFrame(columns=df_matriz_macro.columns)
-            if not df_final_display.empty:
-                df_total_geral_row = gerar_tabela_analitica_padrao(df_atual, df_ly, e_linhas, incluir_total=True).tail(1).copy()
-                df_total_geral_row[e_linhas] = "Total Geral"
-                df_final_display = pd.concat([df_final_display, df_total_geral_row], ignore_index=True)
-                
-            selecao = st.dataframe(df_final_display, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_final_display, e_linhas), on_select="rerun", selection_mode="single-row", key=f"pivot_{st.session_state['df_key_counter']}")
-            rows_selecionadas = selecao.selection.get("rows", []) if selecao else []
-            if rows_selecionadas:
-                meta_linha = mapeamento_linhas.get(rows_selecionadas[0])
-                if meta_linha and meta_linha['type'] == 'master':
-                    if meta_linha['name'] in st.session_state['expanded_items']: st.session_state['expanded_items'].remove(meta_linha['name'])
-                    else: st.session_state['expanded_items'].add(meta_linha['name'])
-                    st.session_state['df_key_counter'] += 1
-                    st.rerun()
-
-# ==========================================================
-# ⚙️ ABA: CONFIGURAÇÕES
-# ==========================================================
-elif pagina_selecionada == "⚙️ Configurações":
-    with st.container(border=True):
-        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>⚙️</div><h4 class='chart-title-text'>Console de Governança do Sistema</h4></div>", unsafe_allow_html=True)
-        st.write("🔧 **Configurações do Engine de Dados**")
-        st.caption(f"Conexão do Banco de Dados: Ativa (PostgreSQL Supabase)")
-        st.caption(f"Sincronização de Carga Externa: Conectada (Aba: Base_Vendas)")
-        if st.button("🗑️ Limpar Cache do Sistema", use_container_width=True):
-            st.cache_data.clear()
-            st.success("Cache limpo com sucesso!")
