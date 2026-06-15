@@ -61,7 +61,8 @@ if not st.session_state["autenticado"] and "usr" in st.query_params:
     email_salvo = st.query_params["usr"]
     conn = st.connection("postgresql", type="sql")
     check_df = conn.query("SELECT status FROM usuarios WHERE email = :email", params={"email": email_salvo}, ttl=0)
-    if not check_df.empty && check_df.iloc[0]['status'] == "Ativo":
+    # 🎯 BUGFIX CORRIGIDO: Alterado '&&' para 'and' na linha abaixo
+    if not check_df.empty and check_df.iloc[0]['status'] == "Ativo":
         st.session_state["autenticado"] = True
         st.session_state["usuario_atual"] = email_salvo
 
@@ -423,7 +424,7 @@ with st.container(border=True):
 inicio_ts, fim_ts = pd.to_datetime(data_inicio), pd.to_datetime(data_fim)
 df_filtrado_geral = df_base.copy()
 if canais: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Cliente'].isin(canais)]
-if categories := categorias: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Categoria'].isin(categories)]
+if categorias: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Categoria'].isin(categorias)]
 if subcategorias: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Subcategoria'].isin(subcategorias)]
 if fabricantes: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Fabricante'].isin(fabricantes)]
 if produtos: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Produto'].isin(produtos)]
@@ -576,7 +577,7 @@ elif pagina_selecionada == "📈 Vendas por Mês":
             df_matriz_mes = gerar_tabela_analitica_padrao(df_atual, df_ly, 'Mes_Ano', incluir_total=True)
             df_graf_mes = df_matriz_mes[df_matriz_mes['Mes_Ano'] != "Total Geral"].copy()
             
-            # 🎯 NOVO REQUISITO: Gráfico de Sazonalidade YoY Mensal Completo
+            # Gráfico de Sazonalidade YoY Mensal Completo
             if not df_graf_mes.empty:
                 fig_vendas_mes = go.Figure()
                 x_indices = list(range(len(df_graf_mes)))
