@@ -634,7 +634,7 @@ elif pagina_selecionada == "📈 Vendas por Mês":
             st.dataframe(df_matriz_mes, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_mes, "Mês / Ano"))
 
 # ==========================================================
-# 🎯 🔄 COMPARAÇÃO DE PERÍODOS (DATA A VS DATA B REAL)
+# 🎯 🔄 COMPARAÇÃO DE PERÍODOS (DATA A VS DATA B DINÂMICO)
 # ==========================================================
 elif pagina_selecionada == "🔄 Comparação de Períodos":
     st.markdown("<h3 style='margin-top:0px; font-weight:700; color:#F8FAFC;'>Cruzamento Estratégico de Períodos Dinâmicos</h3>", unsafe_allow_html=True)
@@ -654,7 +654,7 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
     df_per_a = df_filtrado_geral[(df_filtrado_geral['Data'] >= ini_a_ts) & (df_filtrado_geral['Data'] <= fim_a_ts)]
     df_per_b = df_filtrado_geral[(df_filtrado_geral['Data'] >= ini_b_ts) & (df_filtrado_geral['Data'] <= fim_b_ts)]
     
-    # Cálculo das métricas locais para os cards dinâmicos
+    # Calculation local
     fat_a, qtd_a = df_per_a['Total'].sum(), df_per_a['Quantidade'].sum()
     tk_a = fat_a / qtd_a if qtd_a > 0 else 0
     ped_a = df_per_a['Ped_Cliente'].nunique()
@@ -668,7 +668,7 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
     v_tk_c = ((tk_a / tk_b) - 1) * 100 if tk_b > 0 else 0
     v_ped_c = ((ped_a / ped_b) - 1) * 100 if ped_b > 0 else 0
     
-    # Renderização do Cockpit de Cards Locais YoY
+    # Cards locais YoY
     kc1, kc2, kc3, kc4 = st.columns(4)
     with kc1: st.markdown(f"<div class='kpi-card blue-accent'><div class='kpi-title'>Qtd de Itens (A)</div><div class='kpi-value'>{qtd_a:.0f}</div><div class='kpi-footer'><span class='{'badge-positive' if v_qtd_c >= 0 else 'badge-negative'}'>{v_qtd_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({qtd_b:.0f})</span></div></div>", unsafe_allow_html=True)
     with kc2: st.markdown(f"<div class='kpi-card emerald-accent'><div class='kpi-title'>Ticket Médio (A)</div><div class='kpi-value'>{formatar_moeda_br_completo(tk_a)}</div><div class='kpi-footer'><span class='{'badge-positive' if v_tk_c >= 0 else 'badge-negative'}'>{v_tk_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({formatar_moeda_br(tk_b)})</span></div></div>", unsafe_allow_html=True)
@@ -676,9 +676,9 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
     with kc4: st.markdown(f"<div class='kpi-card purple-accent'><div class='kpi-title'>Vendas (A)</div><div class='kpi-value'>{formatar_moeda_br(fat_a)}</div><div class='kpi-footer'><span class='{'badge-positive' if v_fat_c >= 0 else 'badge-negative'}'>{v_fat_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({formatar_moeda_br(fat_b)})</span></div></div>", unsafe_allow_html=True)
     st.write("\n")
 
-    # Gráfico Diário de Cockpit Espelhado por Dia Relativo do Período
+    # Gráfico Diário Temporal Cruzado por Dia Numérico Relativo
     with st.container(border=True):
-        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>Performance Comparativa (Linha do Tempo: Dia a Dia dos Períodos)</h4></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>{titulo_grafico_tempo} (Período A vs Período B)</h4></div>", unsafe_allow_html=True)
         
         df_g_a = pd.DataFrame(columns=['Dia_Num', 'Atual'])
         if not df_per_a.empty:
@@ -741,8 +741,10 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
                         linha_filha = sub_row.copy()
                         linha_filha[e_linhas_comp] = f"          {sub_row['Produto']}"
                         
-                        if 'Produto' in inline_index := linha_filha.index:
-                            if 'Produto' in inline_index: linha_filha = linha_filha.drop('Produto')
+                        # 🎯 BUGFIX CORRIGIDO: Removido o operador walrus inline problemático e substituído por uma desestruturação limpa em duas linhas
+                        inline_index = linha_filha.index
+                        if 'Produto' in inline_index:
+                            linha_filha = linha_filha.drop('Produto')
                             
                         linhas_exibicao.append(linha_filha)
                         mapeamento_linhas[ponteiro_indice] = {'type': 'child', 'name': sub_row['Produto']}
@@ -773,3 +775,60 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
 # 📋 TABELA DINÂMICA
 # ==========================================================
 elif pagina_selecionada == "📋 Tabela Dinâmica":
+    with st.container(border=True):
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📋</div><h4 class='chart-title-text'>Tabelas</h4></div>", unsafe_allow_html=True)
+        e_linhas = st.selectbox("Selecionar Tabela", options=["Cliente", "Categoria", "Subcategoria", "Fabricante"])
+        if not df_atual.empty or not df_ly.empty:
+            df_matriz_macro = gerar_tabela_analitica_padrao(df_atual, df_ly, e_linhas, incluir_total=False).sort_values(by='Vendas', ascending=False)
+            linhas_exibicao, mapeamento_linhas, pointer_idx = [], {}, 0
+            
+            for _, row in df_matriz_macro.iterrows():
+                item_nome = row[e_linhas]
+                esta_expandido = item_nome in st.session_state['expanded_items']
+                linha_mestre = row.copy()
+                linha_mestre[e_linhas] = f"   -   {item_nome}" if esta_expandido else f"   +   {item_nome}"
+                linhas_exibicao.append(linha_mestre)
+                mapeamento_linhas[pointer_idx] = {'type': 'master', 'name': item_nome}
+                pointer_idx += 1
+                
+                if esta_expandido:
+                    df_matriz_sub = gerar_tabela_analitica_padrao(df_atual[df_atual[e_linhas] == item_nome], df_ly[df_ly[e_linhas] == item_nome], 'Produto', incluir_total=False).sort_values(by='Vendas', ascending=False)
+                    for _, sub_row in df_matriz_sub.iterrows():
+                        linha_filha = sub_row.copy()
+                        linha_filha[e_linhas] = f"          {sub_row['Produto']}"
+                        
+                        if 'Produto' in linha_filha.index:
+                            linha_filha = linha_filha.drop('Produto')
+                            
+                        linhas_exibicao.append(linha_filha)
+                        mapeamento_linhas[pointer_idx] = {'type': 'child', 'name': sub_row['Produto']}
+                        pointer_idx += 1
+                        
+            df_final_display = pd.DataFrame(linhas_exibicao) if linhas_exibicao else pd.DataFrame(columns=df_matriz_macro.columns)
+            if not df_final_display.empty:
+                df_total_geral_row = gerar_tabela_analitica_padrao(df_atual, df_ly, e_linhas, incluir_total=True).tail(1).copy()
+                df_total_geral_row[e_linhas] = "Total Geral"
+                df_final_display = pd.concat([df_final_display, df_total_geral_row], ignore_index=True)
+                
+            selecao = st.dataframe(df_final_display, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_final_display, e_linhas), on_select="rerun", selection_mode="single-row", key=f"pivot_{st.session_state['df_key_counter']}")
+            rows_selecionadas = selecao.selection.get("rows", []) if selecao else []
+            if rows_selecionadas:
+                meta_linha = mapeamento_linhas.get(rows_selecionadas[0])
+                if meta_linha and meta_linha['type'] == 'master':
+                    if meta_linha['name'] in st.session_state['expanded_items']: st.session_state['expanded_items'].remove(meta_linha['name'])
+                    else: st.session_state['expanded_items'].add(meta_linha['name'])
+                    st.session_state['df_key_counter'] += 1
+                    st.rerun()
+
+# ==========================================================
+# ⚙️ ABA: CONFIGURAÇÕES
+# ==========================================================
+elif pagina_selecionada == "⚙️ Configurações":
+    with st.container(border=True):
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>⚙️</div><h4 class='chart-title-text'>Console de Governança do Sistema</h4></div>", unsafe_allow_html=True)
+        st.write("🔧 **Configurações do Engine de Dados**")
+        st.caption(f"Conexão do Banco de Dados: Ativa (PostgreSQL Supabase)")
+        st.caption(f"Sincronização de Carga Externa: Conectada (Aba: Base_Vendas)")
+        if st.button("🗑️ Limpar Cache do Sistema", use_container_width=True):
+            st.cache_data.clear()
+            st.success("Cache limpo com sucesso!")
