@@ -1,4 +1,4 @@
-import streamlit st
+import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta, timezone
 from dateutil.relativedelta import relativedelta
@@ -236,7 +236,7 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
     total_faturamento_atual = df_at['Total'].sum()
     cols_grupo = [coluna_grupo] if isinstance(coluna_grupo, str) else coluna_grupo
     
-    # 🎯 CORREÇÃO CONTRA KEYERROR: Injeta a coluna Mes_Ano nos dados atuais para a aba comercial funcionar lisa
+    # Cria a coluna Mes_Ano estruturada para os dados atuais prevenindo o KeyError
     df_at_copy = df_at.copy()
     if 'Mes_Ano' in cols_grupo and not df_at_copy.empty:
         df_at_copy['Mes_Ano'] = df_at_copy['Data'].dt.strftime('%m/%Y')
@@ -416,7 +416,7 @@ with st.container(border=True):
     with col_per_ini: data_inicio = st.date_input("Data Inicial", value=data_inicial_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
     with col_per_fim: data_fim = st.date_input("Data Final", value=data_final_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
         
-    # 🎯 BUGFIX CORRIGIDO: Removida a atribuição com sinal de igual que quebrava o bloco de filtros
+    # Limpeza absoluta do bloco de filtros
     with col_can: canais = st.multiselect("Cliente", options=df_base['Cliente'].dropna().unique(), placeholder="Todos")
     with col_cat: categorias = st.multiselect("Categoria", options=df_base['Categoria'].dropna().unique(), placeholder="Todas")
     with col_sub: subcategorias = st.multiselect("Subcategoria", options=df_base['Subcategoria'].dropna().unique(), placeholder="Todas")
@@ -429,7 +429,7 @@ with st.container(border=True):
 inicio_ts, fim_ts = pd.to_datetime(data_inicio), pd.to_datetime(data_fim)
 df_filtrado_geral = df_base.copy()
 if canais: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Cliente'].isin(canais)]
-if categories := categorias: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Categoria'].isin(categories)]
+if categorias: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Categoria'].isin(categorias)]
 if subcategorias: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Subcategoria'].isin(subcategorias)]
 if fabricantes: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Fabricante'].isin(fabricantes)]
 if produtos: df_filtrado_geral = df_filtrado_geral[df_filtrado_geral['Produto'].isin(produtos)]
@@ -515,7 +515,7 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
-                    # 🎯 BUGFIX SOLUCIONADO DEFINITIVO: Corrigidos os colchetes substituindo de vez o '=' por '[' na linha 518
+                    # 🎯 REVISADO E BLINDADO: Sintaxe corrigida de colchetes limpa manualmente
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
                     if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
@@ -715,7 +715,6 @@ elif pagina_selecionada == "📋 Tabela Dinâmica":
                 df_total_geral_row[e_linhas] = "Total Geral"
                 df_final_display = pd.concat([df_final_display, df_total_geral_row], ignore_index=True)
                 
-            # 🎯 BUGFIX CORRIGIDO: Alterado 'if lines_exibicao' para 'if linhas_exibicao' prevenindo NameError
             selecao = st.dataframe(df_final_display, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_final_display, e_linhas), on_select="rerun", selection_mode="single-row", key=f"pivot_{st.session_state['df_key_counter']}")
             rows_selecionadas = selecao.selection.get("rows", []) if selecao else []
             if rows_selecionadas:
