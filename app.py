@@ -397,23 +397,28 @@ if st.sidebar.button("🔒 Sair do Painel", use_container_width=True):
 # FILTRO EM LINHA ÚNICA NATIVA DENTRO DO CONTAINER
 # ==========================================================
 with st.container(border=True):
-    col_preset, col_per_ini, col_per_fim, col_can, col_cat, col_sub, col_fab, col_pro, col_btn = st.columns([1.5, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 0.8])
-
     hoje = date.today()
     primeiro_dia_mes = date(hoje.year, hoje.month, 1)
     min_data_db = df_base['Data'].min().date() if not df_base.empty else date(2020, 1, 1)
 
-    with col_preset:
-        time_preset = st.selectbox("Período Rápido", options=["Customizado", "Este Mês (MTD)", "Ano Corrente (YTD)", "Últimos 30 Dias", "Todo o Histórico"], index=1)
+    # 🎯 CONFIGURAÇÃO CORRIGIDA: Se estiver na aba de Comparação, remove por completo as colunas de data do topo
+    if pagina_selecionada == "🔄 Comparação de Períodos":
+        col_can, col_cat, col_sub, col_fab, col_pro, col_btn = st.columns([1.6, 1.6, 1.6, 1.6, 1.6, 1.0])
+        data_inicio = primeiro_dia_mes
+        data_fim = hoje
+    else:
+        col_preset, col_per_ini, col_per_fim, col_can, col_cat, col_sub, col_fab, col_pro, col_btn = st.columns([1.5, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 0.8])
+        with col_preset:
+            time_preset = st.selectbox("Período Rápido", options=["Customizado", "Este Mês (MTD)", "Ano Corrente (YTD)", "Últimos 30 Dias", "Todo o Histórico"], index=1)
 
-    if time_preset == "Este Mês (MTD)": data_inicial_calculada, data_final_calculada = primeiro_dia_mes, hoje
-    elif time_preset == "Ano Corrente (YTD)": data_inicial_calculada, data_final_calculada = date(hoje.year, 1, 1), hoje
-    elif time_preset == "Últimos 30 Dias": data_inicial_calculada, data_final_calculada = hoje - relativedelta(days=30), hoje
-    elif time_preset == "Todo o Histórico": data_inicial_calculada, data_final_calculada = min_data_db, hoje
-    else: data_inicial_calculada, data_final_calculada = primeiro_dia_mes, hoje
+        if time_preset == "Este Mês (MTD)": data_inicial_calculada, data_final_calculada = primeiro_dia_mes, hoje
+        elif time_preset == "Ano Corrente (YTD)": data_inicial_calculada, data_final_calculada = date(hoje.year, 1, 1), hoje
+        elif time_preset == "Últimos 30 Dias": data_inicial_calculada, data_final_calculada = hoje - relativedelta(days=30), hoje
+        elif time_preset == "Todo o Histórico": data_inicial_calculada, data_final_calculada = min_data_db, hoje
+        else: data_inicial_calculada, data_final_calculada = primeiro_dia_mes, hoje
 
-    with col_per_ini: data_inicio = st.date_input("Data Inicial", value=data_inicial_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
-    with col_per_fim: data_fim = st.date_input("Data Final", value=data_final_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
+        with col_per_ini: data_inicio = st.date_input("Data Inicial", value=data_inicial_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
+        with col_per_fim: data_fim = st.date_input("Data Final", value=data_final_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
         
     with col_can: canais = st.multiselect("Cliente", options=df_base['Cliente'].dropna().unique(), placeholder="Todos")
     with col_cat: categorias = st.multiselect("Categoria", options=df_base['Categoria'].dropna().unique(), placeholder="Todas")
@@ -514,7 +519,7 @@ if pagina_selecionada == "🏠 Visão Geral":
                 
                 for i, row in df_graf_temp.iterrows():
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row='Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
                 fig_mes = make_subplots(specs=[[{"secondary_y": True}]])
                 x_indices = list(range(len(df_graf_temp)))
@@ -634,7 +639,7 @@ elif pagina_selecionada == "📈 Vendas por Mês":
             st.dataframe(df_matriz_mes, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_mes, "Mês / Ano"))
 
 # ==========================================================
-# 🎯 🔄 COMPARAÇÃO DE PERÍODOS (DATA A VS DATA B DINÂMICO)
+# 🎯 🔄 COMPARAÇÃO DE PERÍODOS (DATA A VS DATA B REAL E COMPACTO)
 # ==========================================================
 elif pagina_selecionada == "🔄 Comparação de Períodos":
     st.markdown("<h3 style='margin-top:0px; font-weight:700; color:#F8FAFC;'>Cruzamento Estratégico de Períodos Dinâmicos</h3>", unsafe_allow_html=True)
@@ -642,10 +647,10 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
     # Bloco autônomo de sub-filtros de data (Data A vs Data B)
     with st.container(border=True):
         c_a1, c_a2, c_b1, c_b2 = st.columns(4)
-        with c_a1: data_a_ini = st.date_input("Período A - Início", value=data_inicio, format="DD/MM/YYYY")
-        with c_a2: data_a_fim = st.date_input("Período A - Fim", value=data_fim, format="DD/MM/YYYY")
-        with c_b1: data_b_ini = st.date_input("Período B - Início", value=data_inicio - relativedelta(months=1), format="DD/MM/YYYY")
-        with c_b2: data_b_fim = st.date_input("Período B - Fim", value=data_fim - relativedelta(months=1), format="DD/MM/YYYY")
+        with c_a1: data_a_ini = st.date_input("Período A - Início", value=date.today() - relativedelta(days=14), format="DD/MM/YYYY")
+        with c_a2: data_a_fim = st.date_input("Período A - Fim", value=date.today(), format="DD/MM/YYYY")
+        with c_b1: data_b_ini = st.date_input("Período B - Início", value=date.today() - relativedelta(days=29), format="DD/MM/YYYY")
+        with c_b2: data_b_fim = st.date_input("Período B - Fim", value=date.today() - relativedelta(days=15), format="DD/MM/YYYY")
             
     ini_a_ts, fim_a_ts = pd.to_datetime(data_a_ini), pd.to_datetime(data_a_fim)
     ini_b_ts, fim_b_ts = pd.to_datetime(data_b_ini), pd.to_datetime(data_b_fim)
@@ -667,6 +672,10 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
     v_qtd_c = ((qtd_a / qtd_b) - 1) * 100 if qtd_b > 0 else 0
     v_tk_c = ((tk_a / tk_b) - 1) * 100 if tk_b > 0 else 0
     v_ped_c = ((ped_a / ped_b) - 1) * 100 if ped_b > 0 else 0
+    
+    # 🎯 BUGFIX CORRIGIDO: Declarada a variável com o cálculo de dias do Período A local
+    dias_per_a = (fim_a_ts - ini_a_ts).days
+    titulo_grafico_tempo = "Faturamento Diário Comercial" if dias_per_a <= 60 else "Performance Histórica Mensal"
     
     # Cards locais YoY
     kc1, kc2, kc3, kc4 = st.columns(4)
@@ -741,7 +750,6 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
                         linha_filha = sub_row.copy()
                         linha_filha[e_linhas_comp] = f"          {sub_row['Produto']}"
                         
-                        # 🎯 BUGFIX CORRIGIDO: Removido o operador walrus inline problemático e substituído por uma desestruturação limpa em duas linhas
                         inline_index = linha_filha.index
                         if 'Produto' in inline_index:
                             linha_filha = linha_filha.drop('Produto')
