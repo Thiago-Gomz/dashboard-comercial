@@ -61,7 +61,6 @@ if not st.session_state["autenticado"] and "usr" in st.query_params:
     email_salvo = st.query_params["usr"]
     conn = st.connection("postgresql", type="sql")
     check_df = conn.query("SELECT status FROM usuarios WHERE email = :email", params={"email": email_salvo}, ttl=0)
-    # 🎯 BUGFIX CORRIGIDO: Alterado '&&' para 'and' na linha abaixo
     if not check_df.empty and check_df.iloc[0]['status'] == "Ativo":
         st.session_state["autenticado"] = True
         st.session_state["usuario_atual"] = email_salvo
@@ -237,8 +236,13 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
     total_faturamento_atual = df_at['Total'].sum()
     cols_grupo = [coluna_grupo] if isinstance(coluna_grupo, str) else coluna_grupo
     
-    if not df_at.empty:
-        agg_at = df_at.groupby(cols_grupo).agg(Vendas=('Total', 'sum'), Qtd_de_Itens=('Quantidade', 'sum'), Pedidos=('Ped_Cliente', 'nunique')).reset_index()
+    # 🎯 BUGFIX SOLUCIONADO: Converte 'Data' para 'Mes_Ano' também nos dados Atuais para evitar o KeyError
+    df_at_copy = df_at.copy()
+    if 'Mes_Ano' in cols_grupo and not df_at_copy.empty:
+        df_at_copy['Mes_Ano'] = df_at_copy['Data'].dt.strftime('%m/%Y')
+    
+    if not df_at_copy.empty:
+        agg_at = df_at_copy.groupby(cols_grupo).agg(Vendas=('Total', 'sum'), Qtd_de_Itens=('Quantidade', 'sum'), Pedidos=('Ped_Cliente', 'nunique')).reset_index()
     else:
         agg_at = pd.DataFrame(columns=cols_grupo + ['Vendas', 'Qtd_de_Itens', 'Pedidos'])
         
@@ -272,16 +276,16 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
         if len(cols_grupo) > 1:
             for c in cols_grupo[1:]: total_row[c] = ""
             
-        total_row['Vendas'] = df_at['Total'].sum()
+        total_row['Vendas'] = df_at_copy['Total'].sum()
         total_row['Vendas LY'] = df_ly_raw['Total'].sum()
         total_row['Diferença Vendas %'] = ((total_row['Vendas'] / total_row['Vendas LY']) - 1) * 100 if total_row['Vendas LY'] > 0 else (100 if total_row['Vendas'] > 0 else 0)
         total_row['% de Participação'] = 100.0 if total_row['Vendas'] > 0 else 0
         
-        total_row['Pedidos'] = df_at['Ped_Cliente'].nunique()
+        total_row['Pedidos'] = df_at_copy['Ped_Cliente'].nunique()
         total_row['Pedidos LY'] = df_ly_raw['Ped_Cliente'].nunique()
         total_row['Diferença Pedidos %'] = ((total_row['Pedidos'] / total_row['Pedidos LY']) - 1) * 100 if total_row['Pedidos LY'] > 0 else (100 if total_row['Pedidos'] > 0 else 0)
         
-        total_row['Qtd de Itens'] = df_at['Quantidade'].sum()
+        total_row['Qtd de Itens'] = df_at_copy['Quantidade'].sum()
         total_row['Itens LY'] = df_ly_raw['Quantidade'].sum()
         total_row['Diferença Itens %'] = ((total_row['Qtd de Itens'] / total_row['Itens LY']) - 1) * 100 if total_row['Itens LY'] > 0 else (100 if total_row['Qtd de Itens'] > 0 else 0)
         
@@ -412,7 +416,7 @@ with st.container(border=True):
     with col_per_ini: data_inicio = st.date_input("Data Inicial", value=data_inicial_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
     with col_per_fim: data_fim = st.date_input("Data Final", value=data_final_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
         
-    with col_can: canais = st.multiselect("Cliente", options=df_base['Cliente'].dropna().unique(), placeholder="Todos")
+    with col_can = canais: canais = st.multiselect("Cliente", options=df_base['Cliente'].dropna().unique(), placeholder="Todos")
     with col_cat: categorias = st.multiselect("Categoria", options=df_base['Categoria'].dropna().unique(), placeholder="Todas")
     with col_sub: subcategorias = st.multiselect("Subcategoria", options=df_base['Subcategoria'].dropna().unique(), placeholder="Todas")
     with col_fab: fabricantes = st.multiselect("Fabricante", options=df_base['Fabricante'].dropna().unique(), placeholder="Todos")
@@ -511,7 +515,7 @@ if pagina_selecionada == "🏠 Visão Geral":
                 
                 for i, row in df_graf_temp.iterrows():
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row='Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
                 fig_mes = make_subplots(specs=[[{"secondary_y": True}]])
                 x_indices = list(range(len(df_graf_temp)))
