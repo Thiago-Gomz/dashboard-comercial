@@ -11,7 +11,7 @@ import numpy as np
 import io
 import base64
 
-# CONFIGURAÇÃO MANDATÓRIA: Primeira linha para ativar o modo tela cheia nativo
+# CONFIGURAÇÃO MANDATÓREIA: Primeira linha para ativar o modo tela cheia nativo
 st.set_page_config(page_title="Datalake Comercial Executivo", layout="wide")
 
 # ==========================================================
@@ -401,6 +401,7 @@ with st.container(border=True):
     primeiro_dia_mes = date(hoje.year, hoje.month, 1)
     min_data_db = df_base['Data'].min().date() if not df_base.empty else date(2020, 1, 1)
 
+    # Se estiver na aba de Comparação, remove por completo as colunas de data do topo
     if pagina_selecionada == "🔄 Comparação de Períodos":
         col_can, col_cat, col_sub, col_fab, col_pro, col_btn = st.columns([1.6, 1.6, 1.6, 1.6, 1.6, 1.0])
         data_inicio = primeiro_dia_mes
@@ -517,7 +518,6 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
-                    # 🎯 SOLUCIONADO DEFINITIVO: Corrigidos os colchetes substituindo de vez o '=' por '['
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
                     if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
@@ -642,9 +642,7 @@ elif pagina_selecionada == "📈 Vendas por Mês":
 # 🎯 🔄 COMPARAÇÃO DE PERÍODOS (DATA A VS DATA B REAL E COMPACTO)
 # ==========================================================
 elif pagina_selecionada == "🔄 Comparação de Períodos":
-    st.markdown("<h3 style='margin-top:0px; font-weight:700; color:#F8FAFC;'>Cruzamento Estratégico de Períodos Dinâmicos</h3>", unsafe_allow_html=True)
-    
-    # Bloco autônomo de sub-filtros de data (Data A vs Data B)
+    # Bloco autônomo de sub-filtros de data (Data A vs Data B) - 🎯 NOVO REQUISITO: Título removido, inicia direto no filtro
     with st.container(border=True):
         c_a1, c_a2, c_b1, c_b2 = st.columns(4)
         with c_a1: data_a_ini = st.date_input("Período A - Início", value=date.today() - relativedelta(days=14), format="DD/MM/YYYY")
@@ -676,57 +674,107 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
     dias_per_a = (fim_a_ts - ini_a_ts).days
     titulo_grafico_tempo = "Faturamento Diário Comercial" if dias_per_a <= 60 else "Performance Histórica Mensal"
     
-    # Cards locais YoY
+    # Cards locais YoY com nomenclatura Período A e Período B
     kc1, kc2, kc3, kc4 = st.columns(4)
-    with kc1: st.markdown(f"<div class='kpi-card blue-accent'><div class='kpi-title'>Qtd de Itens (A)</div><div class='kpi-value'>{qtd_a:.0f}</div><div class='kpi-footer'><span class='{'badge-positive' if v_qtd_c >= 0 else 'badge-negative'}'>{v_qtd_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({qtd_b:.0f})</span></div></div>", unsafe_allow_html=True)
-    with kc2: st.markdown(f"<div class='kpi-card emerald-accent'><div class='kpi-title'>Ticket Médio (A)</div><div class='kpi-value'>{formatar_moeda_br_completo(tk_a)}</div><div class='kpi-footer'><span class='{'badge-positive' if v_tk_c >= 0 else 'badge-negative'}'>{v_tk_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({formatar_moeda_br(tk_b)})</span></div></div>", unsafe_allow_html=True)
-    with kc3: st.markdown(f"<div class='kpi-card orange-accent'><div class='kpi-title'>Pedidos (A)</div><div class='kpi-value'>{ped_a:.0f}</div><div class='kpi-footer'><span class='{'badge-positive' if v_ped_c >= 0 else 'badge-negative'}'>{v_ped_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({ped_b:.0f})</span></div></div>", unsafe_allow_html=True)
-    with kc4: st.markdown(f"<div class='kpi-card purple-accent'><div class='kpi-title'>Vendas (A)</div><div class='kpi-value'>{formatar_moeda_br(fat_a)}</div><div class='kpi-footer'><span class='{'badge-positive' if v_fat_c >= 0 else 'badge-negative'}'>{v_fat_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({formatar_moeda_br(fat_b)})</span></div></div>", unsafe_allow_html=True)
+    with kc1: st.markdown(f"<div class='kpi-card blue-accent'><div class='kpi-title'>Qtd de Itens (Período A)</div><div class='kpi-value'>{qtd_a:.0f}</div><div class='kpi-footer'><span class='{'badge-positive' if v_qtd_c >= 0 else 'badge-negative'}'>{v_qtd_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({qtd_b:.0f})</span></div></div>", unsafe_allow_html=True)
+    with kc2: st.markdown(f"<div class='kpi-card emerald-accent'><div class='kpi-title'>Ticket Médio (Período A)</div><div class='kpi-value'>{formatar_moeda_br_completo(tk_a)}</div><div class='kpi-footer'><span class='{'badge-positive' if v_tk_c >= 0 else 'badge-negative'}'>{v_tk_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({formatar_moeda_br(tk_b)})</span></div></div>", unsafe_allow_html=True)
+    with kc3: st.markdown(f"<div class='kpi-card orange-accent'><div class='kpi-title'>Pedidos (Período A)</div><div class='kpi-value'>{ped_a:.0f}</div><div class='kpi-footer'><span class='{'badge-positive' if v_ped_c >= 0 else 'badge-negative'}'>{v_ped_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({ped_b:.0f})</span></div></div>", unsafe_allow_html=True)
+    with kc4: st.markdown(f"<div class='kpi-card purple-accent'><div class='kpi-title'>Vendas (Período A)</div><div class='kpi-value'>{formatar_moeda_br(fat_a)}</div><div class='kpi-footer'><span class='{'badge-positive' if v_fat_c >= 0 else 'badge-negative'}'>{v_fat_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({formatar_moeda_br(fat_b)})</span></div></div>", unsafe_allow_html=True)
     st.write("\n")
 
     # Gráfico Diário Temporal Cruzado por Dia Numérico Relativo
     with st.container(border=True):
         st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>{titulo_grafico_tempo} (Período A vs Período B)</h4></div>", unsafe_allow_html=True)
         
-        df_g_a = pd.DataFrame(columns=['Dia_Num', 'Atual'])
-        if not df_per_a.empty:
-            df_t_a = df_per_a.copy().sort_values('Data')
-            df_t_a['Dia_Num'] = (df_t_a['Data'] - df_t_a['Data'].min()).dt.days + 1
-            df_g_a = df_t_a.groupby('Dia_Num')['Total'].sum().reset_index().rename(columns={'Total': 'Atual'})
-            
-        df_g_b = pd.DataFrame(columns=['Dia_Num', 'LY'])
-        if not df_per_b.empty:
-            df_t_b = df_per_b.copy().sort_values('Data')
-            df_t_b['Dia_Num'] = (df_t_b['Data'] - df_t_b['Data'].min()).dt.days + 1
-            df_g_b = df_t_b.groupby('Dia_Num')['Total'].sum().reset_index().rename(columns={'Total': 'LY'})
-            
-        if not df_g_a.empty or not df_g_b.empty:
-            df_graf_comp = pd.merge(df_g_a, df_g_b, on='Dia_Num', how='outer').fillna(0).sort_values('Dia_Num')
-            df_graf_comp['Eixo_X'] = df_graf_comp['Dia_Num'].apply(lambda x: f"Dia {x}")
-            df_graf_comp['Var_Perc'] = df_graf_comp.apply(lambda r: ((r['Atual'] / r['LY']) - 1) * 100 if r['LY'] > 0 else (100 if r['Atual'] > 0 else 0), axis=1)
-            
-            df_graf_comp['Texto_Atual'] = df_graf_comp['Atual'].apply(formatar_moeda_br)
-            df_graf_comp['Texto_LY'] = df_graf_comp['LY'].apply(formatar_moeda_br)
-            df_graf_comp['Texto_Var'] = df_graf_comp['Var_Perc'].apply(lambda x: f"{x:+.1f}%".replace('.', ','))
-            df_graf_comp['Hover_Atual'] = df_graf_comp['Atual'].apply(formatar_moeda_br_completo)
-            df_graf_comp['Hover_LY'] = df_graf_comp['LY'].apply(formatar_moeda_br_completo)
-            
-            lista_anotacoes_comp = []
-            max_global_val = max(df_graf_comp['Atual'].max(), df_graf_comp['LY'].max()) if not df_graf_comp.empty else 1
-            
-            fig_comp_dates = go.Figure()
-            fig_comp_dates.add_trace(go.Scatter(x=df_graf_comp['Eixo_X'], y=df_graf_comp['LY'], name='Período B', mode='lines+markers', line=dict(color='#F59E0B', width=2, shape='spline'), fill='tozeroy', fillcolor='rgba(245, 158, 11, 0.02)', marker=dict(color='#F59E0B', size=4), customdata=df_graf_comp['Hover_LY'], hovertemplate="<b>Período B:</b> %{customdata}<extra></extra>"))
-            fig_comp_dates.add_trace(go.Scatter(x=df_graf_comp['Eixo_X'], y=df_graf_comp['Atual'], name='Período A', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_comp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Período A:</b> %{customdata[0]}<br><b>Var:</b> %{customdata[1]}<extra></extra>"))
-            
-            if len(df_graf_comp) <= 31:
+        if dias_per_a <= 60:
+            df_g_a = pd.DataFrame(columns=['Eixo_X', 'Atual', 'Dia_Num'])
+            if not df_per_a.empty:
+                df_t_a = df_per_a.copy().sort_values('Data')
+                df_t_a['Dia_Num'] = (df_t_a['Data'] - df_t_a['Data'].min()).dt.days + 1
+                df_g_a = df_t_a.groupby('Dia_Num')['Total'].sum().reset_index().rename(columns={'Total': 'Atual'})
+                df_g_a['Eixo_X'] = df_g_a['Dia_Num'].apply(lambda x: f"Dia {x}")
+                
+            df_g_b = pd.DataFrame(columns=['Eixo_X', 'LY', 'Dia_Num'])
+            if not df_per_b.empty:
+                df_t_b = df_per_b.copy().sort_values('Data')
+                df_t_b['Dia_Num'] = (df_t_b['Data'] - df_t_b['Data'].min()).dt.days + 1
+                df_g_b = df_t_b.groupby('Dia_Num')['Total'].sum().reset_index().rename(columns={'Total': 'LY'})
+                df_b_map = df_g_b.copy()
+                df_b_map['Eixo_X'] = df_b_map['Dia_Num'].apply(lambda x: f"Dia {x}")
+            else:
+                df_b_map = pd.DataFrame(columns=['Eixo_X', 'LY', 'Dia_Num'])
+                
+            if not df_g_a.empty or not df_b_map.empty:
+                df_graf_comp = pd.merge(df_g_a[['Eixo_X', 'Atual', 'Dia_Num']], df_b_map[['Eixo_X', 'LY']], on='Eixo_X', how='outer').fillna(0)
+                if 'Dia_Num' in df_graf_comp.columns: df_graf_comp = df_graf_comp.sort_values('Dia_Num')
+                
+                df_graf_comp['Var_Perc'] = df_graf_comp.apply(lambda r: ((r['Atual'] / r['LY']) - 1) * 100 if r['LY'] > 0 else (100 if r['Atual'] > 0 else 0), axis=1)
+                df_graf_comp['Texto_Atual'] = df_graf_comp['Atual'].apply(formatar_moeda_br)
+                df_graf_comp['Texto_LY'] = df_graf_comp['LY'].apply(formatar_moeda_br)
+                df_graf_comp['Texto_Var'] = df_graf_comp['Var_Perc'].apply(lambda x: f"{x:+.1f}%".replace('.', ','))
+                df_graf_comp['Hover_Atual'] = df_graf_comp['Atual'].apply(formatar_moeda_br_completo)
+                df_graf_comp['Hover_LY'] = df_graf_comp['LY'].apply(formatar_moeda_br_completo)
+                
+                lista_anotacoes_comp = []
+                fig_comp_dates = go.Figure()
+                fig_comp_dates.add_trace(go.Scatter(x=df_graf_comp['Eixo_X'], y=df_graf_comp['LY'], name='Período B', mode='lines+markers', line=dict(color='#F59E0B', width=2, shape='spline'), fill='tozeroy', fillcolor='rgba(245, 158, 11, 0.02)', marker=dict(color='#F59E0B', size=4), customdata=df_graf_comp['Hover_LY'], hovertemplate="<b>Período B:</b> %{customdata}<extra></extra>"))
+                fig_comp_dates.add_trace(go.Scatter(x=df_graf_comp['Eixo_X'], y=df_graf_comp['Atual'], name='Período A', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_comp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Período A:</b> %{customdata[0]}<br><b>Var:</b> %{customdata[1]}<extra></extra>"))
+                
+                if len(df_graf_comp) <= 31:
+                    for i, row in df_graf_comp.iterrows():
+                        if row['LY'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
+                        if row['Atual'] > 0: lista_anotacoes_comp.append(dict(x=row='Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                
+                fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), yaxis=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
+                st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
+        else:
+            df_g_a = pd.DataFrame(columns=['Eixo_X', 'Atual', 'Mes_Num'])
+            if not df_per_a.empty:
+                df_t_a = df_per_a.copy().sort_values('Data')
+                df_t_a['Mes_Num'] = (df_t_a['Data'].dt.year - ini_a_ts.year) * 12 + df_t_a['Data'].dt.month - ini_a_ts.month + 1
+                df_g_a = df_t_a.groupby('Mes_Num')['Total'].sum().reset_index().rename(columns={'Total': 'Atual'})
+                df_g_a['Eixo_X'] = df_g_a['Mes_Num'].apply(lambda x: f"Mês {x}")
+                
+            df_g_b = pd.DataFrame(columns=['Eixo_X', 'LY', 'Mes_Num'])
+            if not df_per_b.empty:
+                df_t_b = df_per_b.copy().sort_values('Data')
+                df_t_b['Mes_Num'] = (df_t_b['Data'].dt.year - ini_b_ts.year) * 12 + df_t_b['Data'].dt.month - ini_b_ts.month + 1
+                df_g_b = df_t_b.groupby('Mes_Num')['Total'].sum().reset_index().rename(columns={'Total': 'LY'})
+                df_b_map = df_g_b.copy()
+                df_b_map['Eixo_X'] = df_b_map['Mes_Num'].apply(lambda x: f"Mês {x}")
+            else:
+                df_b_map = pd.DataFrame(columns=['Eixo_X', 'LY', 'Mes_Num'])
+                
+            if not df_g_a.empty or not df_b_map.empty:
+                df_graf_comp = pd.merge(df_g_a[['Eixo_X', 'Atual', 'Mes_Num']], df_b_map[['Eixo_X', 'LY']], on='Eixo_X', how='outer').fillna(0)
+                if 'Mes_Num' in df_graf_comp.columns: df_graf_comp = df_graf_comp.sort_values('Mes_Num')
+                
+                df_graf_comp['Var_Perc'] = df_graf_comp.apply(lambda r: ((r['Atual'] / r['LY']) - 1) * 100 if r['LY'] > 0 else (100 if r['Atual'] > 0 else 0), axis=1)
+                df_graf_comp['Texto_Atual'] = df_graf_comp['Atual'].apply(formatar_moeda_br)
+                df_graf_comp['Texto_LY'] = df_graf_comp['LY'].apply(formatar_moeda_br)
+                df_graf_comp['Texto_Var'] = df_graf_comp['Var_Perc'].apply(lambda x: f"{x:+.1f}%".replace('.', ','))
+                df_graf_comp['Hover_Atual'] = df_graf_comp['Atual'].apply(formatar_moeda_br_completo)
+                df_graf_comp['Hover_LY'] = df_graf_comp['LY'].apply(formatar_moeda_br_completo)
+                
+                lista_anotacoes_comp = []
+                max_global_val = max(df_graf_comp['Atual'].max(), df_graf_comp['LY'].max()) if not df_graf_comp.empty else 1
+                
+                fig_comp_dates = make_subplots(specs=[[{"secondary_y": True}]])
+                x_indices = list(range(len(df_graf_comp)))
+                
+                fig_comp_dates.add_trace(go.Bar(x=x_indices, y=df_graf_comp['Atual'], name='Período A', marker_color='#3B82F6', customdata=df_graf_comp['Hover_Atual'], hovertemplate="<b>Período A:</b> %{customdata}<extra></extra>"), secondary_y=False)
+                fig_comp_dates.add_trace(go.Bar(x=x_indices, y=df_graf_comp['LY'], name='Período B', marker_color='#F59E0B', customdata=df_graf_comp['Hover_LY'], hovertemplate="<b>Período B:</b> %{customdata}<extra></extra>"), secondary_y=False)
+                fig_comp_dates.add_trace(go.Scatter(x=x_indices, y=df_graf_comp['Var_Perc'], name='Variação %', mode='lines+markers', line=dict(color='#64748B', width=2), marker=dict(size=5), customdata=df_graf_comp['Texto_Var'], hovertemplate="<b>Var:</b> %{customdata}<extra></extra>"), secondary_y=True)
+                
                 for i, row in df_graf_comp.iterrows():
-                    if row['LY'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Atual'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
-            
-            fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), yaxis=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
-            st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
+                    if row['LY'] > 0: lista_anotacoes_comp.append(dict(x=i + 0.20, y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=6, xanchor='center', yanchor='bottom', font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=3))
+                    if row['Atual'] > 0: lista_anotacoes_comp.append(dict(x=i - 0.20, y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=6, xanchor='center', yanchor='bottom', font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=3))
+                    lista_anotacoes_comp.append(dict(x=i, y=row['Var_Perc'], text=row['Texto_Var'], showarrow=False, yshift=16, xanchor='center', yanchor='bottom', font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#1E293B', borderpad=3.5, xref="x", yref="y2"))
+                
+                fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), xaxis=dict(title="", showgrid=False, tickmode='array', tickvals=x_indices, ticktext=df_graf_comp['Eixo_X']), yaxis=dict(range=[0, max_global_val * 1.30]), yaxis2=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
+                st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
 
-    # Tabela Dinâmica Multi-Nível Expandível Adaptada Autônoma
+    # Tabela Dinâmica Multi-Nível Expandível Adaptada Autônoma com Rótulos A para A e B para B
     with st.container(border=True):
         st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📋</div><h4 class='chart-title-text'>Matriz Dinâmica Executiva: Período A vs Período B</h4></div>", unsafe_allow_html=True)
         e_linhas_comp = st.selectbox("Selecionar Tabela de Comparação", options=["Cliente", "Categoria", "Subcategoria", "Fabricante"], key="selectbox_comp_periodos_dinamico")
@@ -763,10 +811,32 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
                 df_total_geral_row[e_linhas_comp] = "Total Geral"
                 df_final_display = pd.concat([df_final_display, df_total_geral_row], ignore_index=True)
             
-            # Altera cirurgicamente os rótulos das barras de progresso locais
-            config_custom_per = obter_config_colunas_bi(df_final_display, e_linhas_comp)
-            config_custom_per["Vendas"] = st.column_config.ProgressColumn("Vendas Período A", format="R$ %,.2f", min_value=0, max_value=float(df_final_display["Vendas"].max()) if "Vendas" in df_final_display.columns else 1.0, color="blue")
-            config_custom_per["Vendas LY"] = st.column_config.ProgressColumn("Vendas Período B", format="R$ %,.2f", min_value=0, max_value=float(df_final_display["Vendas LY"].max()) if "Vendas LY" in df_final_display.columns else 1.0, color="orange")
+            # Estruturação cirúrgica dos rótulos de colunas A para A e B para B apenas nesta página livre de LY
+            max_v_a = float(df_final_display["Vendas"].max()) if "Vendas" in df_final_display.columns and df_final_display["Vendas"].max() > 0 else 1.0
+            max_v_b = float(df_final_display["Vendas LY"].max()) if "Vendas LY" in df_final_display.columns and df_final_display["Vendas LY"].max() > 0 else 1.0
+            max_p_a = float(df_final_display["Pedidos"].max()) if "Pedidos" in df_final_display.columns and df_final_display["Pedidos"].max() > 0 else 1.0
+            max_p_b = float(df_final_display["Pedidos LY"].max()) if "Pedidos LY" in df_final_display.columns and df_final_display["Pedidos LY"].max() > 0 else 1.0
+            max_q_a = float(df_final_display["Qtd de Itens"].max()) if "Qtd de Itens" in df_final_display.columns and df_final_display["Qtd de Itens"].max() > 0 else 1.0
+            max_q_b = float(df_final_display["Itens LY"].max()) if "Itens LY" in df_final_display.columns and df_final_display["Itens LY"].max() > 0 else 1.0
+            max_t_a = float(df_final_display["Ticket Medio"].max()) if "Ticket Medio" in df_final_display.columns and df_final_display["Ticket Medio"].max() > 0 else 1.0
+            max_t_b = float(df_final_display["Ticket Medio LY"].max()) if "Ticket Medio LY" in df_final_display.columns and df_final_display["Ticket Medio LY"].max() > 0 else 1.0
+
+            config_custom_per = {
+                df_final_display.columns[0]: st.column_config.TextColumn(e_linhas_comp, alignment="left"),
+                "Vendas": st.column_config.ProgressColumn("Vendas Período A", format="R$ %,.2f", min_value=0, max_value=max_v_a, color="blue"),
+                "Vendas LY": st.column_config.ProgressColumn("Vendas Período B", format="R$ %,.2f", min_value=0, max_value=max_v_b, color="orange"),
+                "Diferença Vendas %": st.column_config.NumberColumn("Var Vendas %", format="%,.2f%%"),
+                "% de Participação": st.column_config.ProgressColumn("% Part. Período A", format="%,.2f%%", min_value=0, max_value=100, color="blue"),
+                "Pedidos": st.column_config.ProgressColumn("Pedidos Período A", format="%d", min_value=0, max_value=max_p_a, color="blue"),
+                "Pedidos LY": st.column_config.ProgressColumn("Pedidos Período B", format="%d", min_value=0, max_value=max_p_b, color="orange"),
+                "Diferença Pedidos %": st.column_config.NumberColumn("Var Pedidos %", format="%,.2f%%"),
+                "Qtd de Itens": st.column_config.ProgressColumn("Qtd Itens Período A", format="%d", min_value=0, max_value=max_q_a, color="blue"),
+                "Itens LY": st.column_config.ProgressColumn("Qtd Itens Período B", format="%d", min_value=0, max_value=max_q_b, color="orange"),
+                "Diferença Itens %": st.column_config.NumberColumn("Var Itens %", format="%,.2f%%"),
+                "Ticket Medio": st.column_config.ProgressColumn("Tkt Médio Período A", format="R$ %,.2f", min_value=0, max_value=max_t_a, color="blue"),
+                "Ticket Medio LY": st.column_config.ProgressColumn("Tkt Médio Período B", format="R$ %,.2f", min_value=0, max_value=max_t_b, color="orange"),
+                "Diferença Ticket %": st.column_config.NumberColumn("Var Tkt Médio %", format="%,.2f%%"),
+            }
             
             selecao = st.dataframe(df_final_display, use_container_width=True, hide_index=True, column_config=config_custom_per, on_select="rerun", selection_mode="single-row", key=f"pivot_comp_dates_{st.session_state['df_key_counter']}")
             rows_selecionadas = selecao.selection.get("rows", []) if selecao else []
@@ -804,7 +874,6 @@ elif pagina_selecionada == "📋 Tabela Dinâmica":
                         linha_filha = sub_row.copy()
                         linha_filha[e_linhas] = f"          {sub_row['Produto']}"
                         
-                        # 🎯 CORRIGIDO COMPORTAMENTO DA REGRESSÃO OCULTA: escopo local seguro para a tabela dinamica padrao
                         local_index = linha_filha.index
                         if 'Produto' in local_index:
                             linha_filha = linha_filha.drop('Produto')
