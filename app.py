@@ -545,7 +545,7 @@ if pagina_selecionada == "🏠 Visão Geral":
                 
                 for i, row in df_graf_temp.iterrows():
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row='Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
                 fig_mes = make_subplots(specs=[[{"secondary_y": True}]])
                 x_indices = list(range(len(df_graf_temp)))
@@ -634,14 +634,13 @@ elif pagina_selecionada == "📈 Vendas por Mês":
                     lista_anotacoes_mes.append(dict(x=i, y=row_g['Diferença Vendas %'], text=f"{row_g['Diferença Vendas %']:+.1f}%".replace('.', ','), showarrow=False, yshift=14, xanchor='center', yanchor='bottom', font=dict(color='white', size=10, family='Inter', weight='bold'), bgcolor='#1E293B', borderpad=3, xref="x", yref="y2"))
                 
                 max_val_mes = max(df_graf_mes['Vendas'].max(), df_graf_mes['Vendas LY'].max()) if not df_graf_mes.empty else 1
-                # 🎯 BUGFIX SOLUCIONADO: Fechado o parêntese de legend=dict(...) antes de passar annotations e height
                 fig_vendas_mes.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), xaxis=dict(title="", showgrid=False, tickmode='array', tickvals=x_indices, ticktext=df_graf_mes['Mes_Ano']), yaxis=dict(title="", showgrid=False, showticklabels=False, range=[0, max_val_mes * 1.25]), yaxis2=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=20, b=40), barmode='group', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5), annotations=lista_anotacoes_mes, height=420)
                 st.plotly_chart(fig_vendas_mes, use_container_width=True, config={'displayModeBar': 'hover'})
             
             st.dataframe(df_matriz_mes, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_mes, "Mês / Ano"))
 
 # ==========================================================
-# 🔄 COMPARAÇÃO DE PERÍODOS (DATA A VS DATA B REAL E CONTINUA)
+# 🎯 🔄 COMPARAÇÃO DE PERÍODOS (LABORATÓRIO AUTO-CONTIDO A VS B)
 # ==========================================================
 elif pagina_selecionada == "🔄 Comparação de Períodos":
     with st.container(border=True):
@@ -671,8 +670,12 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
     v_tk_c = ((tk_a / tk_b) - 1) * 100 if tk_b > 0 else 0
     v_ped_c = ((ped_a / ped_b) - 1) * 100 if ped_b > 0 else 0
     
+    # 🎯 ATUALIZAÇÃO REQUISITADA: Regra de comutação baseada em > 28 dias em AMBOS os períodos
     dias_per_a = (fim_a_ts - ini_a_ts).days
-    titulo_grafico_tempo = "Faturamento Diário Comercial" if dias_per_a <= 60 else "Performance Histórica Mensal"
+    dias_per_b = (fim_b_ts - ini_b_ts).days
+    
+    usar_grafico_barras = (dias_per_a > 28 and dias_per_b > 28)
+    titulo_grafico_tempo = "Performance Histórica Mensal" if usar_grafico_barras else "Faturamento Diário Comercial"
     
     kc1, kc2, kc3, kc4 = st.columns(4)
     with kc1: st.markdown(f"<div class='kpi-card blue-accent'><div class='kpi-title'>Qtd de Itens (Período A)</div><div class='kpi-value'>{qtd_a:.0f}</div><div class='kpi-footer'><span class='{'badge-positive' if v_qtd_c >= 0 else 'badge-negative'}'>{v_qtd_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({qtd_b:.0f})</span></div></div>", unsafe_allow_html=True)
@@ -681,65 +684,30 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
     with kc4: st.markdown(f"<div class='kpi-card purple-accent'><div class='kpi-title'>Vendas (Período A)</div><div class='kpi-value'>{formatar_moeda_br(fat_a)}</div><div class='kpi-footer'><span class='{'badge-positive' if v_fat_c >= 0 else 'badge-negative'}'>{v_fat_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({formatar_moeda_br(fat_b)})</span></div></div>", unsafe_allow_html=True)
     st.write("\n")
 
-    if dias_per_a <= 60:
-        df_g_a = df_per_a.copy()
-        df_g_a['Sort_Key'] = df_g_a['Data'].dt.strftime('%Y-%m-%d')
-        df_g_a['Eixo_X'] = df_g_a['Data'].dt.strftime('%d/%m')
-        df_g_a_agg = df_g_a.groupby(['Sort_Key', 'Eixo_X'])['Total'].sum().reset_index().rename(columns={'Total': 'Vendas_A'})
-
-        df_g_b = df_per_b.copy()
-        df_g_b['Sort_Key'] = df_g_b['Data'].dt.strftime('%Y-%m-%d')
-        df_g_b['Eixo_X'] = df_g_b['Data'].dt.strftime('%d/%m')
-        df_g_b_agg = df_g_b.groupby(['Sort_Key', 'Eixo_X'])['Total'].sum().reset_index().rename(columns={'Total': 'Vendas_B'})
-
-        df_graf_comp = pd.merge(df_g_a_agg, df_g_b_agg, on=['Sort_Key', 'Eixo_X'], how='outer').fillna(0)
-        df_graf_comp = df_graf_comp.sort_values('Sort_Key', ascending=True)
-
-        df_graf_comp['Var_Perc'] = df_graf_comp.apply(lambda r: ((r['Vendas_A'] / r['Vendas_B']) - 1) * 100 if r['Vendas_B'] > 0 else (100 if r['Vendas_A'] > 0 else 0), axis=1)
-        df_graf_comp['Texto_A'] = df_graf_comp['Vendas_A'].apply(formatar_moeda_br)
-        df_graf_comp['Texto_B'] = df_graf_comp['Vendas_B'].apply(formatar_moeda_br)
-        df_graf_comp['Texto_Var'] = df_graf_comp['Var_Perc'].apply(lambda x: f"{x:+.1f}%".replace('.', ','))
-        df_graf_comp['Hover_A'] = df_graf_comp['Vendas_A'].apply(formatar_moeda_br_completo)
-        df_graf_comp['Hover_B'] = df_graf_comp['Vendas_B'].apply(formatar_moeda_br_completo)
-
-        with st.container(border=True):
-            st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>{titulo_grafico_tempo} (Período A vs Período B)</h4></div>", unsafe_allow_html=True)
-            
-            lista_anotacoes_comp = []
-            fig_comp_dates = go.Figure()
-            fig_comp_dates.add_trace(go.Scatter(x=df_graf_comp['Eixo_X'], y=df_graf_comp['Vendas_B'], name='Período B', mode='lines+markers', line=dict(color='#F59E0B', width=2, shape='spline'), fill='tozeroy', fillcolor='rgba(245, 158, 11, 0.02)', marker=dict(color='#F59E0B', size=4), customdata=df_graf_comp['Hover_B'], hovertemplate="<b>Período B:</b> %{customdata}<extra></extra>"))
-            fig_comp_dates.add_trace(go.Scatter(x=df_graf_comp['Eixo_X'], y=df_graf_comp['Vendas_A'], name='Período A', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_comp[['Hover_A', 'Texto_Var']], hovertemplate="<b>Período A:</b> %{customdata[0]}<br><b>Var:</b> %{customdata[1]}<extra></extra>"))
-            
-            if len(df_graf_comp) <= 31:
-                for i, row in df_graf_comp.iterrows():
-                    if row['Vendas_B'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Vendas_B'], text=row['Texto_B'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Vendas_A'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Vendas_A'], text=row['Texto_A'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
-            
-            fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), yaxis=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
-            st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
-    else:
-        df_g_a = df_per_a.copy()
-        df_g_a['Sort_Key'] = df_g_a['Data'].dt.strftime('%Y-%m')
-        df_g_a['Eixo_X'] = df_g_a['Data'].apply(lambda r: f"{meses_pt[r.month]} - {r.strftime('%y')}")
-        df_g_a_agg = df_g_a.groupby(['Sort_Key', 'Eixo_X'])['Total'].sum().reset_index().rename(columns={'Total': 'Vendas_A'})
-
-        df_g_b = df_per_b.copy()
-        df_g_b['Sort_Key'] = df_g_b['Data'].dt.strftime('%Y-%m')
-        df_g_b['Eixo_X'] = df_g_b['Data'].apply(lambda r: f"{meses_pt[r.month]} - {r.strftime('%y')}")
-        df_g_b_agg = df_g_b.groupby(['Sort_Key', 'Eixo_X'])['Total'].sum().reset_index().rename(columns={'Total': 'Vendas_B'})
-
-        df_graf_comp = pd.merge(df_g_a_agg, df_g_b_agg, on=['Sort_Key', 'Eixo_X'], how='outer').fillna(0)
-        df_graf_comp = df_graf_comp.sort_values('Sort_Key', ascending=True)
+    with st.container(border=True):
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>{titulo_grafico_tempo} (Período A vs Período B)</h4></div>", unsafe_allow_html=True)
         
-        df_graf_comp['Var_Perc'] = df_graf_comp.apply(lambda r: ((r['Vendas_A'] / r['Vendas_B']) - 1) * 100 if r['Vendas_B'] > 0 else (100 if r['Vendas_A'] > 0 else 0), axis=1)
-        df_graf_comp['Texto_A'] = df_graf_comp['Vendas_A'].apply(formatar_moeda_br)
-        df_graf_comp['Texto_B'] = df_graf_comp['Vendas_B'].apply(formatar_moeda_br)
-        df_graf_comp['Texto_Var'] = df_graf_comp['Var_Perc'].apply(lambda x: f"{x:+.1f}%".replace('.', ','))
-        df_graf_comp['Hover_A'] = df_graf_comp['Vendas_A'].apply(formatar_moeda_br_completo)
-        df_graf_comp['Hover_B'] = df_graf_comp['Vendas_B'].apply(formatar_moeda_br_completo)
-        
-        with st.container(border=True):
-            st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>{titulo_grafico_tempo} (Período A vs Período B)</h4></div>", unsafe_allow_html=True)
+        if usar_grafico_barras:
+            # 📊 Cenário Mensal (> 28 Dias): Barras agrupadas com meses reais por extenso
+            df_g_a = df_per_a.copy()
+            df_g_a['Sort_Key'] = df_g_a['Data'].dt.strftime('%Y-%m')
+            df_g_a['Eixo_X'] = df_g_a['Data'].apply(lambda r: f"{meses_pt[r.month]} - {r.strftime('%y')}")
+            df_g_a_agg = df_g_a.groupby(['Sort_Key', 'Eixo_X'])['Total'].sum().reset_index().rename(columns={'Total': 'Vendas_A'})
+
+            df_g_b = df_per_b.copy()
+            df_g_b['Sort_Key'] = df_g_b['Data'].dt.strftime('%Y-%m')
+            df_g_b['Eixo_X'] = df_g_b['Data'].apply(lambda r: f"{meses_pt[r.month]} - {r.strftime('%y')}")
+            df_g_b_agg = df_g_b.groupby(['Sort_Key', 'Eixo_X'])['Total'].sum().reset_index().rename(columns={'Total': 'Vendas_B'})
+
+            df_graf_comp = pd.merge(df_g_a_agg, df_g_b_agg, on=['Sort_Key', 'Eixo_X'], how='outer').fillna(0)
+            df_graf_comp = df_graf_comp.sort_values('Sort_Key', ascending=True)
+            
+            df_graf_comp['Var_Perc'] = df_graf_comp.apply(lambda r: ((r['Vendas_A'] / r['Vendas_B']) - 1) * 100 if r['Vendas_B'] > 0 else (100 if r['Vendas_A'] > 0 else 0), axis=1)
+            df_graf_comp['Texto_A'] = df_graf_comp['Vendas_A'].apply(formatar_moeda_br)
+            df_graf_comp['Texto_B'] = df_graf_comp['Vendas_B'].apply(formatar_moeda_br)
+            df_graf_comp['Texto_Var'] = df_graf_comp['Var_Perc'].apply(lambda x: f"{x:+.1f}%".replace('.', ','))
+            df_graf_comp['Hover_A'] = df_graf_comp['Vendas_A'].apply(formatar_moeda_br_completo)
+            df_graf_comp['Hover_B'] = df_graf_comp['Vendas_B'].apply(formatar_moeda_br_completo)
             
             lista_anotacoes_comp = []
             max_global_val = max(df_graf_comp['Vendas_A'].max(), df_graf_comp['Vendas_B'].max()) if not df_graf_comp.empty else 1
@@ -754,10 +722,43 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
             for i, row in df_graf_comp.iterrows():
                 if row['Vendas_B'] > 0: lista_anotacoes_comp.append(dict(x=i + 0.15, y=row['Vendas_B'], text=row['Texto_B'], showarrow=False, yshift=6, xanchor='center', yanchor='bottom', font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=3))
                 if row['Vendas_A'] > 0: lista_anotacoes_comp.append(dict(x=i - 0.15, y=row['Vendas_A'], text=row['Texto_A'], showarrow=False, yshift=6, xanchor='center', yanchor='bottom', font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=3))
-                if row['Vendas_B'] > 0 and row['Vendas_A'] > 0:
-                    lista_anotacoes_comp.append(dict(x=i, y=row['Var_Perc'], text=row['Texto_Var'], showarrow=False, yshift=16, xanchor='center', yanchor='bottom', font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#1E293B', borderpad=3.5, xref="x", yref="y2"))
+                lista_anotacoes_comp.append(dict(x=i, y=row['Var_Perc'], text=row['Texto_Var'], showarrow=False, yshift=16, xanchor='center', yanchor='bottom', font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#1E293B', borderpad=3.5, xref="x", yref="y2"))
             
             fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), xaxis=dict(title="", showgrid=False, tickmode='array', tickvals=x_indices, ticktext=df_graf_comp['Eixo_X']), yaxis=dict(range=[0, max_global_val * 1.30]), yaxis2=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
+            st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
+        else:
+            # 📈 Cenário Diário: Linhas de tendência fluidas
+            df_g_a = df_per_a.copy()
+            df_g_a['Sort_Key'] = df_g_a['Data'].dt.strftime('%Y-%m-%d')
+            df_g_a['Eixo_X'] = df_g_a['Data'].dt.strftime('%d/%m')
+            df_g_a_agg = df_g_a.groupby(['Sort_Key', 'Eixo_X'])['Total'].sum().reset_index().rename(columns={'Total': 'Vendas_A'})
+
+            df_g_b = df_per_b.copy()
+            df_g_b['Sort_Key'] = df_g_b['Data'].dt.strftime('%Y-%m-%d')
+            df_g_b['Eixo_X'] = df_g_b['Data'].dt.strftime('%d/%m')
+            df_g_b_agg = df_g_b.groupby(['Sort_Key', 'Eixo_X'])['Total'].sum().reset_index().rename(columns={'Total': 'Vendas_B'})
+
+            df_graf_comp = pd.merge(df_g_a_agg, df_g_b_agg, on=['Sort_Key', 'Eixo_X'], how='outer').fillna(0)
+            df_graf_comp = df_graf_comp.sort_values('Sort_Key', ascending=True)
+
+            df_graf_comp['Var_Perc'] = df_graf_comp.apply(lambda r: ((r['Vendas_A'] / r['Vendas_B']) - 1) * 100 if r['Vendas_B'] > 0 else (100 if r['Vendas_A'] > 0 else 0), axis=1)
+            df_graf_comp['Texto_A'] = df_graf_comp['Vendas_A'].apply(formatar_moeda_br)
+            df_graf_comp['Texto_B'] = df_graf_comp['Vendas_B'].apply(formatar_moeda_br)
+            df_graf_comp['Texto_Var'] = df_graf_comp['Var_Perc'].apply(lambda x: f"{x:+.1f}%".replace('.', ','))
+            df_graf_comp['Hover_A'] = df_graf_comp['Vendas_A'].apply(formatar_moeda_br_completo)
+            df_graf_comp['Hover_B'] = df_graf_comp['Vendas_B'].apply(formatar_moeda_br_completo)
+            
+            lista_anotacoes_comp = []
+            fig_comp_dates = go.Figure()
+            fig_comp_dates.add_trace(go.Scatter(x=df_graf_comp['Eixo_X'], y=df_graf_comp['Vendas_B'], name='Período B', mode='lines+markers', line=dict(color='#F59E0B', width=2, shape='spline'), fill='tozeroy', fillcolor='rgba(245, 158, 11, 0.02)', marker=dict(color='#F59E0B', size=4), customdata=df_graf_comp['Hover_B'], hovertemplate="<b>Período B:</b> %{customdata}<extra></extra>"))
+            fig_comp_dates.add_trace(go.Scatter(x=df_graf_comp['Eixo_X'], y=df_graf_comp['Vendas_A'], name='Período A', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_comp[['Hover_A', 'Texto_Var']], hovertemplate="<b>Período A:</b> %{customdata[0]}<br><b>Var:</b> %{customdata[1]}<extra></extra>"))
+            
+            if len(df_graf_comp) <= 31:
+                for i, row in df_graf_comp.iterrows():
+                    if row['Vendas_B'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Vendas_B'], text=row['Texto_B'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
+                    if row['Vendas_A'] > 0: lista_anotacoes_comp.append(dict(x=row='Eixo_X'], y=row['Vendas_A'], text=row['Texto_A'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+            
+            fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), yaxis=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
             st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
 
     # Tabela Dinâmica Multi-Nível Expandível Adaptada Autônoma com Rótulos A para A e B para B
