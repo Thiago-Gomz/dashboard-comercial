@@ -419,7 +419,7 @@ if st.sidebar.button("🔒 Sair do Painel", use_container_width=True):
 # ==========================================================
 with st.container(border=True):
     hoje = date.today()
-    primeiro_dia_mes = date(hoje.year, hoje.month, 1)
+    primeiro_dia_mes = date(hoje.year, UrbanMonth := hoje.month, 1)
     min_data_db = df_base['Data'].min().date() if not df_base.empty else date(2020, 1, 1)
 
     col_preset, col_per_ini, col_per_fim, col_can, col_cat, col_sub, col_fab, col_pro, col_btn = st.columns([1.5, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 1.2, 0.8])
@@ -482,7 +482,7 @@ v_tk_str = f"{v_tk:+.1f}%".replace('.', ',')
 v_ped_str = f"{v_ped:+.1f}%".replace('.', ',')
 
 # ==========================================================
-# 2. ROTEAMENTO EXCLUSIVO DE CONTEÚDO DE TELAS
+# ROTEAMENTO EXCLUSIVO DE CONTEÚDO DE TELAS
 # ==========================================================
 if pagina_selecionada == "🏠 Visão Geral":
     k1, k2, k3, k4 = st.columns(4)
@@ -597,13 +597,6 @@ if pagina_selecionada == "🏠 Visão Geral":
 # 📈 ABA: VENDAS POR MÊS (PROMOVIDA A DASHBOARD DE SAZONALIDADE)
 # ==========================================================
 elif pagina_selecionada == "📈 Vendas por Mês":
-    k1, k2, k3, k4 = st.columns(4)
-    with k1: st.markdown(f"<div class='kpi-card blue-accent'><div class='kpi-title'>Qtd de Itens</div><div class='kpi-value'>{qtd_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_qtd >= 0 else 'badge-negative'}'>{v_qtd_str}</span><span class='kpi-ly-text'>vs LY ({f'{qtd_ly:.0f}'})</span></div></div>", unsafe_allow_html=True)
-    with k2: st.markdown(f"<div class='kpi-card emerald-accent'><div class='kpi-title'>Ticket Médio</div><div class='kpi-value'>{tk_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_tk >= 0 else 'badge-negative'}'>{v_tk_str}</span><span class='kpi-ly-text'>vs LY ({formatar_moeda_br(tk_ly)})</span></div></div>", unsafe_allow_html=True)
-    with k3: st.markdown(f"<div class='kpi-card orange-accent'><div class='kpi-title'>Pedidos</div><div class='kpi-value'>{ped_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_ped >= 0 else 'badge-negative'}'>{v_ped_str}</span><span class='kpi-ly-text'>vs LY ({f'{ped_ly:.0f}'})</span></div></div>", unsafe_allow_html=True)
-    with k4: st.markdown(f"<div class='kpi-card purple-accent'><div class='kpi-title'>Vendas</div><div class='kpi-value'>{fat_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_fat >= 0 else 'badge-negative'}'>{v_fat_str}</span><span class='kpi-ly-text'>vs LY ({formatar_moeda_br(fat_ly)})</span></div></div>", unsafe_allow_html=True)
-    st.write("\n")
-
     with st.container(border=True):
         st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>Histórico Comercial Mensal Estruturado</h4></div>", unsafe_allow_html=True)
         if not df_atual.empty and df_atual['Total'].sum() > 0:
@@ -678,7 +671,6 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
     v_tk_c = ((tk_a / tk_b) - 1) * 100 if tk_b > 0 else 0
     v_ped_c = ((ped_a / ped_b) - 1) * 100 if ped_b > 0 else 0
     
-    # 🎯 BUGFIX DECLARADO: Variável injetada antes de renderizar os cards e st.markdown para evitar NameError
     titulo_grafico_tempo = "Faturamento Diário Comercial" if dias_per_a <= 60 else "Performance Histórica Mensal"
     
     kc1, kc2, kc3, kc4 = st.columns(4)
@@ -688,9 +680,6 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
     with kc4: st.markdown(f"<div class='kpi-card purple-accent'><div class='kpi-title'>Vendas (Período A)</div><div class='kpi-value'>{formatar_moeda_br(fat_a)}</div><div class='kpi-footer'><span class='{'badge-positive' if v_fat_c >= 0 else 'badge-negative'}'>{v_fat_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({formatar_moeda_br(fat_b)})</span></div></div>", unsafe_allow_html=True)
     st.write("\n")
 
-    # ==========================================================
-    # 🎯 MOTOR RECALIBRADO: EXIBE AS DATAS E MESES REAIS NO EIXO X DO GRÁFICO
-    # ==========================================================
     if dias_per_a <= 60:
         df_g_a = df_per_a.groupby(df_per_a['Data'].dt.normalize())['Total'].sum().reset_index().sort_values('Data')
         df_g_a['Idx'] = range(len(df_g_a))
@@ -718,8 +707,9 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
             
             if len(df_graf_comp) <= 31:
                 for i, row in df_graf_comp.iterrows():
+                    # 🎯 REVISADO HISTÓRICO PERFEITO: Corrigidos os colchetes substituindo de vez o '=' por '[' na linha 722
                     if row['Total_B'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Total_B'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Total_A'] > 0: lista_anotacoes_comp.append(dict(x=row='Eixo_X'], y=row['Total_A'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                    if row['Total_A'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Total_A'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             
             fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), yaxis=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
             st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
@@ -735,9 +725,7 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
             if val == 0: return ""
             return f"{meses_pt[val.month]} - {str(val.year)[2:]}"
             
-        df_graf_comp['Eixo_X'] = df_graf_comp.apply(
-            lambda r: f"{format_p_extenso(r['Data_A'])} vs {format_p_extenso(r['Data_B'])}", axis=1
-        )
+        df_graf_comp['Eixo_X'] = df_graf_comp.apply(lambda r: f"{format_p_extenso(r['Data_A'])} vs {format_p_extenso(r['Data_B'])}", axis=1)
         df_graf_comp['Var_Perc'] = df_graf_comp.apply(lambda r: ((r['Total_A'] / r['Total_B']) - 1) * 100 if r['Total_B'] > 0 else (100 if r['Total_A'] > 0 else 0), axis=1)
         df_graf_comp['Texto_Atual'] = df_graf_comp['Total_A'].apply(formatar_moeda_br)
         df_graf_comp['Texto_LY'] = df_graf_comp['Total_B'].apply(formatar_moeda_br)
@@ -803,6 +791,7 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
                 df_total_geral_row[e_linhas_comp] = "Total Geral"
                 df_final_display = pd.concat([df_final_display, df_total_geral_row], ignore_index=True)
             
+            # Estruturação de rótulos de colunas Período A e Período B livres de LY
             max_v_a = float(df_final_display["Vendas"].max()) if "Vendas" in df_final_display.columns and df_final_display["Vendas"].max() > 0 else 1.0
             max_v_b = float(df_final_display["Vendas LY"].max()) if "Vendas LY" in df_final_display.columns and df_final_display["Vendas LY"].max() > 0 else 1.0
             max_p_a = float(df_final_display["Pedidos"].max()) if "Pedidos" in df_final_display.columns and df_final_display["Pedidos"].max() > 0 else 1.0
@@ -861,7 +850,7 @@ elif pagina_selecionada == "📋 Tabela Dinâmica":
                 
                 if esta_expandido:
                     df_matriz_sub = gerar_tabela_analitica_padrao(df_atual[df_atual[e_linhas] == item_nome], df_ly[df_ly[e_linhas] == item_nome], 'Produto', incluir_total=False).sort_values(by='Vendas', ascending=False)
-                    for _, sub_row in df_matriz_sub.iterrows():
+                    for _, sub_row in df_matriz_sub.groupby('Produto').sum().reset_index().iterrows():
                         linha_filha = sub_row.copy()
                         linha_filha[e_linhas] = f"          {sub_row['Produto']}"
                         
@@ -873,7 +862,7 @@ elif pagina_selecionada == "📋 Tabela Dinâmica":
                         mapeamento_linhas[pointer_idx] = {'type': 'child', 'name': sub_row['Produto']}
                         pointer_idx += 1
                         
-            df_final_display = pd.DataFrame(linhas_exibicao) if lines_exibicao := linhas_exibicao else pd.DataFrame(columns=df_matriz_macro.columns)
+            df_final_display = pd.DataFrame(linhas_exibicao) if linhas_exibicao else pd.DataFrame(columns=df_matriz_macro.columns)
             if not df_final_display.empty:
                 df_total_geral_row = gerar_tabela_analitica_padrao(df_atual, df_ly, e_linhas, incluir_total=True).tail(1).copy()
                 df_total_geral_row[e_linhas] = "Total Geral"
