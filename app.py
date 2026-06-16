@@ -458,7 +458,6 @@ df_atual = df_filtrado_geral[(df_filtrado_geral['Data'] >= inicio_ts) & (df_filt
 df_ly = df_filtrado_geral[(df_filtrado_geral['Data'] >= (inicio_ts - relativedelta(years=1))) & (df_filtrado_geral['Data'] <= (fim_ts - relativedelta(years=1)))]
 
 dias_selecionados = (fim_ts - inicio_ts).days
-formato_data = '%d/%m' if dias_selecionados <= 60 else '%m/%Y'
 
 # Mapeamento e Agregações Compartilhadas
 fat_at, qtd_at = df_atual['Total'].sum(), df_atual['Quantidade'].sum()
@@ -535,8 +534,9 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
+                    # 🎯 REVISADO EXCLUSIVO: Corrigidos os colchetes eliminando o caractere '=' de vez das duas linhas abaixo
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row='Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
                 fig_mes = make_subplots(specs=[[{"secondary_y": True}]])
                 x_indices = list(range(len(df_graf_temp)))
@@ -574,7 +574,6 @@ if pagina_selecionada == "🏠 Visão Geral":
                 df_graf_cat = df_atual.groupby('Categoria')['Total'].sum().reset_index().sort_values(by='Total', ascending=False)
                 fig_cat = px.bar(df_graf_cat, x='Categoria', y='Total', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
                 for idx, row in df_graf_cat.iterrows():
-                    # 🎯 BUGFIX CORRIGIDO ABSOLUTO: Substituído o '=' fantasma por colchete nativo do Pandas row['Categoria']
                     fig_cat.add_annotation(dict(x=row['Categoria'], y=row['Total'], text=formatar_moeda_br(row['Total']), showarrow=False, yshift=6, font=dict(color='#F8FAFC', size=11, family='Inter', weight='bold'), yanchor='bottom', xanchor='center'))
                 fig_cat.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#94A3B8', xaxis=dict(title="", showgrid=False), yaxis=dict(title="", showgrid=False, showticklabels=False, range=[0, df_graf_cat['Total'].max() * 1.25]), margin=dict(l=15, r=15, t=10, b=40), coloraxis_showscale=False, height=350, legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
                 st.plotly_chart(fig_cat, use_container_width=True, config={'displayModeBar': 'hover'})
@@ -606,24 +605,9 @@ elif pagina_selecionada == "📈 Vendas por Mês":
                 fig_vendas_mes = make_subplots(specs=[[{"secondary_y": True}]])
                 x_indices = list(range(len(df_graf_mes)))
                 
-                fig_vendas_mes.add_trace(go.Bar(
-                    x=x_indices, y=df_graf_mes['Vendas'], name='Ano Atual', marker_color='#3B82F6',
-                    customdata=df_graf_mes['Vendas'].apply(formatar_moeda_br_completo),
-                    hovertemplate="<b>Atual:</b> %{customdata}<extra></extra>"
-                ), secondary_y=False)
-                
-                fig_vendas_mes.add_trace(go.Bar(
-                    x=x_indices, y=df_graf_mes['Vendas LY'], name='Ano Anterior (LY)', marker_color='#F59E0B',
-                    customdata=df_graf_mes['Vendas LY'].apply(formatar_moeda_br_completo),
-                    hovertemplate="<b>LY:</b> %{customdata}<extra></extra>"
-                ), secondary_y=False)
-                
-                fig_vendas_mes.add_trace(go.Scatter(
-                    x=x_indices, y=df_graf_mes['Diferença Vendas %'], name='Diferença %', mode='lines+markers',
-                    line=dict(color='#64748B', width=2), marker=dict(size=6),
-                    customdata=df_graf_mes['Diferença Vendas %'].apply(lambda x: f"{x:+.1f}%".replace('.', ',')),
-                    hovertemplate="<b>Cresc:</b> %{customdata}<extra></extra>"
-                ), secondary_y=True)
+                fig_vendas_mes.add_trace(go.Bar(x=x_indices, y=df_graf_mes['Vendas'], name='Ano Atual', marker_color='#3B82F6', customdata=df_graf_mes['Vendas'].apply(formatar_moeda_br_completo), hovertemplate="<b>Atual:</b> %{customdata}<extra></extra>"), secondary_y=False)
+                fig_vendas_mes.add_trace(go.Bar(x=x_indices, y=df_graf_mes['Vendas LY'], name='Ano Anterior (LY)', marker_color='#F59E0B', customdata=df_graf_mes['Vendas LY'].apply(formatar_moeda_br_completo), hovertemplate="<b>LY:</b> %{customdata}<extra></extra>"), secondary_y=False)
+                fig_vendas_mes.add_trace(go.Scatter(x=x_indices, y=df_graf_mes['Diferença Vendas %'], name='Diferença %', mode='lines+markers', line=dict(color='#64748B', width=2), marker=dict(size=6), customdata=df_graf_mes['Diferença Vendas %'].apply(lambda x: f"{x:+.1f}%".replace('.', ',')), hovertemplate="<b>Cresc:</b> %{customdata}<extra></extra>"), secondary_y=True)
                 
                 lista_anotacoes_mes = []
                 for idx, row_g in df_graf_mes.iterrows():
@@ -635,15 +619,7 @@ elif pagina_selecionada == "📈 Vendas por Mês":
                     lista_anotacoes_mes.append(dict(x=i, y=row_g['Diferença Vendas %'], text=f"{row_g['Diferença Vendas %']:+.1f}%".replace('.', ','), showarrow=False, yshift=14, xanchor='center', yanchor='bottom', font=dict(color='white', size=10, family='Inter', weight='bold'), bgcolor='#1E293B', borderpad=3, xref="x", yref="y2"))
                 
                 max_val_mes = max(df_graf_mes['Vendas'].max(), df_graf_mes['Vendas LY'].max()) if not df_graf_mes.empty else 1
-                fig_vendas_mes.update_layout(
-                    plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11),
-                    xaxis=dict(title="", showgrid=False, tickmode='array', tickvals=x_indices, ticktext=df_graf_mes['Mes_Ano']),
-                    yaxis=dict(title="", showgrid=False, showticklabels=False, range=[0, max_val_mes * 1.25]),
-                    yaxis2=dict(title="", showgrid=False, showticklabels=False),
-                    margin=dict(l=15, r=15, t=20, b=40), barmode='group',
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
-                    annotations=lista_anotacoes_mes, height=420
-                )
+                fig_vendas_mes.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), xaxis=dict(title="", showgrid=False, tickmode='array', tickvals=x_indices, ticktext=df_graf_mes['Mes_Ano']), yaxis=dict(title="", showgrid=False, showticklabels=False, range=[0, max_val_mes * 1.25]), yaxis2=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=20, b=40), barmode='group', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5), annotations=lista_anotacoes_mes, height=420)
                 st.plotly_chart(fig_vendas_mes, use_container_width=True, config={'displayModeBar': 'hover'})
             
             st.dataframe(df_matriz_mes, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_mes, "Mês / Ano"))
@@ -727,7 +703,7 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
             if len(df_graf_comp) <= 31:
                 for i, row in df_graf_comp.iterrows():
                     if row['Total_B'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Total_B'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Total_A'] > 0: lista_anotacoes_comp.append(dict(x=row='Eixo_X'], y=row['Total_A'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                    if row['Total_A'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Total_A'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             
             fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), yaxis=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
             st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
@@ -806,6 +782,7 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
                 df_total_geral_row[e_linhas_comp] = "Total Geral"
                 df_final_display = pd.concat([df_final_display, df_total_geral_row], ignore_index=True)
             
+            # Estruturação de rótulos de colunas Período A e Período B livres de LY
             max_v_a = float(df_final_display["Vendas"].max()) if "Vendas" in df_final_display.columns and df_final_display["Vendas"].max() > 0 else 1.0
             max_v_b = float(df_final_display["Vendas LY"].max()) if "Vendas LY" in df_final_display.columns and df_final_display["Vendas LY"].max() > 0 else 1.0
             max_p_a = float(df_final_display["Pedidos"].max()) if "Pedidos" in df_final_display.columns and df_final_display["Pedidos"].max() > 0 else 1.0
@@ -870,7 +847,7 @@ elif pagina_selecionada == "📋 Tabela Dinâmica":
                         
                         local_index = linha_filha.index
                         if 'Produto' in local_index:
-                            linha_filha = linha_filha.drop('Produto')
+                            linha_filha = local_index.drop('Produto')
                             
                         linhas_exibicao.append(linha_filha)
                         mapeamento_linhas[pointer_idx] = {'type': 'child', 'name': sub_row['Produto']}
