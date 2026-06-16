@@ -11,7 +11,7 @@ import numpy as np
 import io
 import base64
 
-# CONFIGURAÇÃO MANDATÓREIA: Primeira linha para ativar o modo tela cheia nativo
+# CONFIGURAÇÃO MANDATÓRIA: Primeira linha para ativar o modo tela cheia nativo
 st.set_page_config(page_title="Datalake Comercial Executivo", layout="wide")
 
 # ==========================================================
@@ -421,7 +421,7 @@ with st.container(border=True):
         with col_per_fim: data_fim = st.date_input("Data Final", value=data_final_calculada, min_value=min_data_db, max_value=hoje, format="DD/MM/YYYY", disabled=(time_preset != "Customizado"))
         
     with col_can: canais = st.multiselect("Cliente", options=df_base['Cliente'].dropna().unique(), placeholder="Todos")
-    with col_cat: categorias = st.multiselect("Categoria", options=df_base['Categoria'].dropna().unique(), placeholder="Todas")
+    with col_cat: categorias = st.multiselect("Categoria", options=df_base['Cliente'].dropna().unique() if 'Categoria' not in df_base.columns else df_base['Categoria'].dropna().unique(), placeholder="Todas")
     with col_sub: subcategorias = st.multiselect("Subcategoria", options=df_base['Subcategoria'].dropna().unique(), placeholder="Todas")
     with col_fab: fabricantes = st.multiselect("Fabricante", options=df_base['Fabricante'].dropna().unique(), placeholder="Todos")
     with col_pro: produtos = st.multiselect("Produto", options=df_base['Produto'].dropna().unique(), placeholder="Todos")
@@ -642,7 +642,7 @@ elif pagina_selecionada == "📈 Vendas por Mês":
 # 🎯 🔄 COMPARAÇÃO DE PERÍODOS (DATA A VS DATA B REAL E COMPACTO)
 # ==========================================================
 elif pagina_selecionada == "🔄 Comparação de Períodos":
-    # Bloco autônomo de sub-filtros de data (Data A vs Data B) - 🎯 NOVO REQUISITO: Título removido, inicia direto no filtro
+    # Bloco autônomo de sub-filtros de data (Data A vs Data B)
     with st.container(border=True):
         c_a1, c_a2, c_b1, c_b2 = st.columns(4)
         with c_a1: data_a_ini = st.date_input("Período A - Início", value=date.today() - relativedelta(days=14), format="DD/MM/YYYY")
@@ -722,8 +722,9 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
                 
                 if len(df_graf_comp) <= 31:
                     for i, row in df_graf_comp.iterrows():
+                        # 🎯 BUGFIX CORRIGIDO COMPLETO: Corrigida a expressão para row['Eixo_X'] eliminando o '=' fujão
                         if row['LY'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                        if row['Atual'] > 0: lista_anotacoes_comp.append(dict(x=row='Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                        if row['Atual'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
                 
                 fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), yaxis=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
                 st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
