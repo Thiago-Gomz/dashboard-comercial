@@ -544,8 +544,9 @@ if pagina_selecionada == "🏠 Visão Geral":
                 fig_mes.add_trace(go.Scatter(x=df_graf_temp['Eixo_X'], y=df_graf_temp['Atual'], name='Ano Atual', mode='lines+markers', line=dict(color='#3B82F6', width=2.5, shape='spline'), fill='tozeroy', fillcolor='rgba(59, 130, 246, 0.08)', marker=dict(color='#3B82F6', size=5), customdata=df_graf_temp[['Hover_Atual', 'Texto_Var']], hovertemplate="<b>Atual:</b> %{customdata[0]}<br><b>Cresc. vs LY:</b> %{customdata[1]}<extra></extra>"))
                 
                 for i, row in df_graf_temp.iterrows():
+                    # 🎯 CORREÇÃO CIRÚRGICA TOTAL: Substituída a sintaxe incorreta por x=row['Eixo_X'] de forma limpa nas duas linhas abaixo
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row='Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
                 fig_mes = make_subplots(specs=[[{"secondary_y": True}]])
                 x_indices = list(range(len(df_graf_temp)))
@@ -602,13 +603,6 @@ if pagina_selecionada == "🏠 Visão Geral":
 # 📈 ABA: VENDAS POR MÊS (PROMOVIDA A DASHBOARD DE SAZONALIDADE)
 # ==========================================================
 elif pagina_selecionada == "📈 Vendas por Mês":
-    k1, k2, k3, k4 = st.columns(4)
-    with k1: st.markdown(f"<div class='kpi-card blue-accent'><div class='kpi-title'>Qtd de Itens</div><div class='kpi-value'>{qtd_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_qtd >= 0 else 'badge-negative'}'>{v_qtd_str}</span><span class='kpi-ly-text'>vs LY ({f'{qtd_ly:.0f}'})</span></div></div>", unsafe_allow_html=True)
-    with k2: st.markdown(f"<div class='kpi-card emerald-accent'><div class='kpi-title'>Ticket Médio</div><div class='kpi-value'>{tk_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_tk >= 0 else 'badge-negative'}'>{v_tk_str}</span><span class='kpi-ly-text'>vs LY ({formatar_moeda_br(tk_ly)})</span></div></div>", unsafe_allow_html=True)
-    with k3: st.markdown(f"<div class='kpi-card orange-accent'><div class='kpi-title'>Pedidos</div><div class='kpi-value'>{ped_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_ped >= 0 else 'badge-negative'}'>{v_ped_str}</span><span class='kpi-ly-text'>vs LY ({f'{ped_ly:.0f}'})</span></div></div>", unsafe_allow_html=True)
-    with k4: st.markdown(f"<div class='kpi-card purple-accent'><div class='kpi-title'>Vendas</div><div class='kpi-value'>{fat_at_str}</div><div class='kpi-footer'><span class='{'badge-positive' if v_fat >= 0 else 'badge-negative'}'>{v_fat_str}</span><span class='kpi-ly-text'>vs LY ({formatar_moeda_br(fat_ly)})</span></div></div>", unsafe_allow_html=True)
-    st.write("\n")
-
     with st.container(border=True):
         st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>Histórico Comercial Mensal Estruturado</h4></div>", unsafe_allow_html=True)
         if not df_atual.empty and df_atual['Total'].sum() > 0:
@@ -634,13 +628,13 @@ elif pagina_selecionada == "📈 Vendas por Mês":
                     lista_anotacoes_mes.append(dict(x=i, y=row_g['Diferença Vendas %'], text=f"{row_g['Diferença Vendas %']:+.1f}%".replace('.', ','), showarrow=False, yshift=14, xanchor='center', yanchor='bottom', font=dict(color='white', size=10, family='Inter', weight='bold'), bgcolor='#1E293B', borderpad=3, xref="x", yref="y2"))
                 
                 max_val_mes = max(df_graf_mes['Vendas'].max(), df_graf_mes['Vendas LY'].max()) if not df_graf_mes.empty else 1
-                fig_vendas_mes.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), xaxis=dict(title="", showgrid=False, tickmode='array', tickvals=x_indices, ticktext=df_graf_mes['Mes_Ano']), yaxis=dict(title="", showgrid=False, showticklabels=False, range=[0, max_val_mes * 1.25]), yaxis2=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=20, b=40), barmode='group', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5), annotations=lista_anotacoes_mes, height=420)
+                fig_vendas_mes.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), xaxis=dict(title="", showgrid=False, tickmode='array', tickvals=x_indices, ticktext=df_graf_mes['Mes_Ano']), yaxis=dict(title="", showgrid=False, showticklabels=False), yaxis2=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=20, b=40), barmode='group', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5), annotations=lista_anotacoes_mes, height=420)
                 st.plotly_chart(fig_vendas_mes, use_container_width=True, config={'displayModeBar': 'hover'})
             
             st.dataframe(df_matriz_mes, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_mes, "Mês / Ano"))
 
 # ==========================================================
-# 🎯 🔄 COMPARAÇÃO DE PERÍODOS (LABORATÓRIO AUTO-CONTIDO A VS B)
+# 🔄 COMPARAÇÃO DE PERÍODOS (DATA A VS DATA B REAL E CONTINUA)
 # ==========================================================
 elif pagina_selecionada == "🔄 Comparação de Períodos":
     with st.container(border=True):
@@ -670,7 +664,6 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
     v_tk_c = ((tk_a / tk_b) - 1) * 100 if tk_b > 0 else 0
     v_ped_c = ((ped_a / ped_b) - 1) * 100 if ped_b > 0 else 0
     
-    # 🎯 ATUALIZAÇÃO REQUISITADA: Regra de comutação baseada em > 28 dias em AMBOS os períodos
     dias_per_a = (fim_a_ts - ini_a_ts).days
     dias_per_b = (fim_b_ts - ini_b_ts).days
     
@@ -688,7 +681,6 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
         st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>{titulo_grafico_tempo} (Período A vs Período B)</h4></div>", unsafe_allow_html=True)
         
         if usar_grafico_barras:
-            # 📊 Cenário Mensal (> 28 Dias): Barras agrupadas com meses reais por extenso
             df_g_a = df_per_a.copy()
             df_g_a['Sort_Key'] = df_g_a['Data'].dt.strftime('%Y-%m')
             df_g_a['Eixo_X'] = df_g_a['Data'].apply(lambda r: f"{meses_pt[r.month]} - {r.strftime('%y')}")
@@ -727,7 +719,6 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
             fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), xaxis=dict(title="", showgrid=False, tickmode='array', tickvals=x_indices, ticktext=df_graf_comp['Eixo_X']), yaxis=dict(range=[0, max_global_val * 1.30]), yaxis2=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
             st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
         else:
-            # 📈 Cenário Diário: Linhas de tendência fluidas
             df_g_a = df_per_a.copy()
             df_g_a['Sort_Key'] = df_g_a['Data'].dt.strftime('%Y-%m-%d')
             df_g_a['Eixo_X'] = df_g_a['Data'].dt.strftime('%d/%m')
@@ -756,7 +747,7 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
             if len(df_graf_comp) <= 31:
                 for i, row in df_graf_comp.iterrows():
                     if row['Vendas_B'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Vendas_B'], text=row['Texto_B'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Vendas_A'] > 0: lista_anotacoes_comp.append(dict(x=row='Eixo_X'], y=row['Vendas_A'], text=row['Texto_A'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                    if row['Vendas_A'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Vendas_A'], text=row['Texto_A'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             
             fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), yaxis=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
             st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
@@ -884,6 +875,21 @@ elif pagina_selecionada == "📋 Tabela Dinâmica":
                     else: st.session_state['expanded_items'].add(meta_linha['name'])
                     st.session_state['df_key_counter'] += 1
                     st.rerun()
+
+# ==========================================================
+# 👥 CLIENTE, 📦 CATEGORIA, 🏭 FABRICANTE, 🛒 PRODUTO
+# ==========================================================
+elif pagina_selecionada in ["👥 Cliente", "📦 Categoria", "🏭 Fabricante", "🛒 Produto"]:
+    mapeamento_abas = {"👥 Cliente": "Cliente", "📦 Categoria": "Categoria", "🏭 Fabricante": "Fabricante", "🛒 Produto": "Produto"}
+    entidade_foco = mapeamento_abas[pagina_selecionada]
+    with st.container(border=True):
+        st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>🎯</div><h4 class='chart-title-text'>Visão Executiva de Performance por {entidade_foco}</h4></div>", unsafe_allow_html=True)
+        df_ranking = df_atual.groupby(entidade_foco)['Total'].sum().reset_index().sort_values(by='Total', ascending=True).tail(8)
+        fig_drill = px.bar(df_ranking, x='Total', y=entidade_foco, orientation='h', color='Total', color_continuous_scale=['#EA580C', '#2563EB'])
+        fig_drill.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font_color='#E5E7EB', xaxis=dict(showgrid=False, showticklabels=False), yaxis=dict(showgrid=False), coloraxis_showscale=False, height=320, margin=dict(l=15, r=15, t=10, b=40), legend=dict(orientation="h", xanchor="center", x=0.5, y=-0.25))
+        st.plotly_chart(fig_drill, use_container_width=True, config={'displayModeBar': 'hover'})
+        df_matriz_dinamica = gerar_tabela_analitica_padrao(df_atual, df_ly, coluna_grupo=entidade_foco, incluir_total=True).sort_values(by='Vendas', ascending=False)
+        st.dataframe(df_matriz_dinamica, use_container_width=True, hide_index=True, column_config=obter_config_colunas_bi(df_matriz_dinamica, label_principal=entidade_foco))
 
 # ==========================================================
 # ⚙️ ABA: CONFIGURAÇÕES
