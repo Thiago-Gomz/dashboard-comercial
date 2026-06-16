@@ -14,6 +14,12 @@ import base64
 # CONFIGURAÇÃO MANDATÓRIA: Primeira linha para ativar o modo tela cheia nativo
 st.set_page_config(page_title="Datalake Comercial Executivo", layout="wide")
 
+# DICIONÁRIO CORPORATIVO GLOBAL DE TRADUÇÃO DE MESES
+meses_pt = {
+    1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril', 5: 'Maio', 6: 'Junho',
+    7: 'Julho', 8: 'Agosto', 9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'
+}
+
 # ==========================================================
 # 🎯 MOTOR DE TRATAMENTO DE IMAGEM: DARK MODE AUTOMÁTICO
 # ==========================================================
@@ -237,8 +243,9 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
     cols_grupo = [coluna_grupo] if isinstance(coluna_grupo, str) else coluna_grupo
     
     df_at_copy = df_at.copy()
+    # 🎯 CONFIGURAÇÃO REVISADA: Injeta YYYY-MM para ordenação cronológica perfeita inicial
     if 'Mes_Ano' in cols_grupo and not df_at_copy.empty:
-        df_at_copy['Mes_Ano'] = df_at_copy['Data'].dt.strftime('%m/%Y')
+        df_at_copy['Mes_Ano'] = df_at_copy['Data'].dt.strftime('%Y-%m')
     
     if not df_at_copy.empty:
         agg_at = df_at_copy.groupby(cols_grupo).agg(Vendas=('Total', 'sum'), Qtd_de_Itens=('Quantidade', 'sum'), Pedidos=('Ped_Cliente', 'nunique')).reset_index()
@@ -248,7 +255,7 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
     df_ly = df_ly_raw.copy()
     if 'Mes_Ano' in cols_grupo and not df_ly.empty:
         df_ly['Data_Shifted'] = df_ly['Data'].apply(lambda x: x + relativedelta(years=1))
-        df_ly['Mes_Ano'] = df_ly['Data_Shifted'].dt.strftime('%m/%Y')
+        df_ly['Mes_Ano'] = df_ly['Data_Shifted'].dt.strftime('%Y-%m')
         
     if not df_ly.empty:
         agg_ly = df_ly.groupby(cols_grupo).agg(Vendas_LY=('Total', 'sum'), Itens_LY=('Quantidade', 'sum'), Pedidos_LY=('Ped_Cliente', 'nunique')).reset_index()
@@ -256,6 +263,10 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
         agg_ly = pd.DataFrame(columns=cols_grupo + ['Vendas_LY', 'Itens_LY', 'Pedidos_LY'])
         
     df_merged = pd.merge(agg_at, agg_ly, on=cols_grupo, how='outer').fillna(0)
+    
+    # Ordena de forma estrita em ordem crescente temporal antes de renomear os meses
+    if 'Mes_Ano' in cols_grupo:
+        df_merged = df_merged.sort_values('Mes_Ano', ascending=True)
     
     df_merged['Diferença Vendas %'] = df_merged.apply(lambda r: ((r['Vendas'] / r['Vendas_LY']) - 1) * 100 if r['Vendas_LY'] > 0 else (100 if r['Vendas'] > 0 else 0), axis=1)
     df_merged['% de Participação'] = df_merged.apply(lambda r: (r['Vendas'] / total_faturamento_atual) * 100 if total_faturamento_atual > 0 else 0, axis=1)
@@ -270,6 +281,16 @@ def gerar_tabela_analitica_padrao(df_at, df_ly_raw, coluna_grupo, incluir_total=
     ordem_final = cols_grupo + ['Vendas', 'Vendas LY', 'Diferença Vendas %', '% de Participação', 'Pedidos', 'Pedidos LY', 'Diferença Pedidos %', 'Qtd de Itens', 'Itens LY', 'Diferença Itens %', 'Ticket Medio', 'Ticket Medio LY', 'Diferença Ticket %']
     df_merged = df_merged[ordem_final]
     
+    # 🎯 FORMATADOR DE MÊS EXCLUSIVO SOLICITADO: Traduz 'YYYY-MM' para 'Abril - 26' mantendo a ordem crescente intacta
+    if 'Mes_Ano' in cols_grupo:
+        def formatar_linha_mes_pt(val):
+            try:
+                p = val.split('-')
+                return f"{meses_pt[int(p[1])]} - {p[0][2:]}"
+            except Exception:
+                return val
+        df_merged['Mes_Ano'] = df_merged['Mes_Ano'].apply(formatar_linha_mes_pt)
+        
     if incluir_total:
         total_row = {cols_grupo[0]: "Total Geral"}
         if len(cols_grupo) > 1:
@@ -401,7 +422,6 @@ with st.container(border=True):
     primeiro_dia_mes = date(hoje.year, hoje.month, 1)
     min_data_db = df_base['Data'].min().date() if not df_base.empty else date(2020, 1, 1)
 
-    # Se estiver na aba de Comparação, remove por completo as colunas de data do topo
     if pagina_selecionada == "🔄 Comparação de Períodos":
         col_can, col_cat, col_sub, col_fab, col_pro, col_btn = st.columns([1.6, 1.6, 1.6, 1.6, 1.6, 1.0])
         data_inicio = primeiro_dia_mes
@@ -441,7 +461,6 @@ df_atual = df_filtrado_geral[(df_filtrado_geral['Data'] >= inicio_ts) & (df_filt
 df_ly = df_filtrado_geral[(df_filtrado_geral['Data'] >= (inicio_ts - relativedelta(years=1))) & (df_filtrado_geral['Data'] <= (fim_ts - relativedelta(years=1)))]
 
 dias_selecionados = (fim_ts - inicio_ts).days
-formato_data = '%d/%m' if dias_selecionados <= 60 else '%m/%Y'
 
 # Mapeamento e Agregações Compartilhadas
 fat_at, qtd_at = df_atual['Total'].sum(), df_atual['Quantidade'].sum()
@@ -486,22 +505,34 @@ if pagina_selecionada == "🏠 Visão Geral":
         titulo_grafico_tempo = "Faturamento Diário Comercial" if dias_selecionados <= 60 else "Performance Histórica Mensal"
         st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>{titulo_grafico_tempo} (Atual vs LY)</h4></div>", unsafe_allow_html=True)
         
-        df_g_atual = pd.DataFrame(columns=['Eixo_X', 'Atual'])
+        # 🎯 MOTOR INTELIGENTE COM CHAVE DE ORDENAÇÃO (Sort_Key) IMPEDE ERRO ALFABÉTICO
+        df_g_atual = pd.DataFrame(columns=['Eixo_X', 'Atual', 'Sort_Key'])
         if not df_atual.empty:
-            df_t_atual = df_atual.copy().sort_values('Data')
-            df_t_atual['Eixo_X'] = df_t_atual['Data'].dt.strftime(formato_data)
-            df_g_atual = df_t_atual.groupby('Eixo_X', sort=False)['Total'].sum().reset_index().rename(columns={'Total': 'Atual'})
+            df_t_atual = df_atual.copy()
+            if dias_selecionados <= 60:
+                df_t_atual['Sort_Key'] = df_t_atual['Data'].dt.strftime('%Y-%m-%d')
+                df_t_atual['Eixo_X'] = df_t_atual['Data'].dt.strftime('%d/%m')
+            else:
+                df_t_atual['Sort_Key'] = df_t_atual['Data'].dt.strftime('%Y-%m')
+                df_t_atual['Eixo_X'] = df_t_atual['Data'].apply(lambda r: f"{meses_pt[r.month]} - {r.strftime('%y')}")
+            df_g_atual = df_t_atual.groupby(['Sort_Key', 'Eixo_X'])['Total'].sum().reset_index().rename(columns={'Total': 'Atual'})
             
-        df_g_ly = pd.DataFrame(columns=['Eixo_X', 'LY'])
+        df_g_ly = pd.DataFrame(columns=['Eixo_X', 'LY', 'Sort_Key'])
         if not df_ly.empty:
             df_t_ly = df_ly.copy()
             df_t_ly['Data_Shifted'] = df_t_ly['Data'].apply(lambda x: x + relativedelta(years=1))
-            df_t_ly = df_t_ly.sort_values('Data_Shifted')
-            df_t_ly['Eixo_X'] = df_t_ly['Data_Shifted'].dt.strftime(formato_data)
-            df_g_ly = df_t_ly.groupby('Eixo_X', sort=False)['Total'].sum().reset_index().rename(columns={'Total': 'LY'})
+            if dias_selecionados <= 60:
+                df_t_ly['Sort_Key'] = df_t_ly['Data_Shifted'].dt.strftime('%Y-%m-%d')
+                df_t_ly['Eixo_X'] = df_t_ly['Data_Shifted'].dt.strftime('%d/%m')
+            else:
+                df_t_ly['Sort_Key'] = df_t_ly['Data_Shifted'].dt.strftime('%Y-%m')
+                df_t_ly['Eixo_X'] = df_t_ly['Data_Shifted'].apply(lambda r: f"{meses_pt[r.month]} - {r.strftime('%y')}")
+            df_g_ly = df_t_ly.groupby(['Sort_Key', 'Eixo_X'])['Total'].sum().reset_index().rename(columns={'Total': 'LY'})
 
         if not df_g_atual.empty or not df_g_ly.empty:
-            df_graf_temp = pd.merge(df_g_atual, df_g_ly, on='Eixo_X', how='outer').fillna(0)
+            df_graf_temp = pd.merge(df_g_atual, df_g_ly, on=['Sort_Key', 'Eixo_X'], how='outer').fillna(0)
+            df_graf_temp = df_graf_temp.sort_values('Sort_Key', ascending=True) # Garante ordem crescente cronológica
+            
             df_graf_temp['Var_Perc'] = df_graf_temp.apply(lambda r: ((r['Atual'] / r['LY']) - 1) * 100 if r['LY'] > 0 else (100 if r['Atual'] > 0 else 0), axis=1)
             df_graf_temp['Texto_Atual'] = df_graf_temp['Atual'].apply(formatar_moeda_br)
             df_graf_temp['Texto_LY'] = df_graf_temp['LY'].apply(formatar_moeda_br)
@@ -519,7 +550,7 @@ if pagina_selecionada == "🏠 Visão Geral":
                 
                 for i, row in df_graf_temp.iterrows():
                     if row['LY'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
-                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
+                    if row['Atual'] > 0: lista_anotacoes.append(dict(x=row='Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
             else:
                 fig_mes = make_subplots(specs=[[{"secondary_y": True}]])
                 x_indices = list(range(len(df_graf_temp)))
@@ -682,31 +713,33 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
     with kc4: st.markdown(f"<div class='kpi-card purple-accent'><div class='kpi-title'>Vendas (Período A)</div><div class='kpi-value'>{formatar_moeda_br(fat_a)}</div><div class='kpi-footer'><span class='{'badge-positive' if v_fat_c >= 0 else 'badge-negative'}'>{v_fat_c:+.1f}%</span><span class='kpi-ly-text'>vs Período B ({formatar_moeda_br(fat_b)})</span></div></div>", unsafe_allow_html=True)
     st.write("\n")
 
-    # Gráfico Diário Temporal Cruzado por Dia Numérico Relativo
+    # Gráfico Diário Temporal Cruzado por Dia Numérico Relativo (Comutação Automática Diária Linha vs Mensal Barras)
     with st.container(border=True):
         st.markdown(f"<div class='chart-header'><div class='chart-icon-box'>📈</div><h4 class='chart-title-text'>{titulo_grafico_tempo} (Período A vs Período B)</h4></div>", unsafe_allow_html=True)
         
         if dias_per_a <= 60:
-            df_g_a = pd.DataFrame(columns=['Eixo_X', 'Atual', 'Dia_Num'])
+            df_g_a = pd.DataFrame(columns=['Eixo_X', 'Atual', 'Dia_Num', 'Sort_Key'])
             if not df_per_a.empty:
-                df_t_a = df_per_a.copy().sort_values('Data')
+                df_t_a = df_per_a.copy()
                 df_t_a['Dia_Num'] = (df_t_a['Data'] - df_t_a['Data'].min()).dt.days + 1
                 df_g_a = df_t_a.groupby('Dia_Num')['Total'].sum().reset_index().rename(columns={'Total': 'Atual'})
+                df_g_a['Sort_Key'] = df_g_a['Dia_Num'].apply(lambda x: f"{x:04d}")
                 df_g_a['Eixo_X'] = df_g_a['Dia_Num'].apply(lambda x: f"Dia {x}")
                 
-            df_g_b = pd.DataFrame(columns=['Eixo_X', 'LY', 'Dia_Num'])
+            df_g_b = pd.DataFrame(columns=['Eixo_X', 'LY', 'Dia_Num', 'Sort_Key'])
             if not df_per_b.empty:
-                df_t_b = df_per_b.copy().sort_values('Data')
+                df_t_b = df_per_b.copy()
                 df_t_b['Dia_Num'] = (df_t_b['Data'] - df_t_b['Data'].min()).dt.days + 1
                 df_g_b = df_t_b.groupby('Dia_Num')['Total'].sum().reset_index().rename(columns={'Total': 'LY'})
                 df_b_map = df_g_b.copy()
+                df_b_map['Sort_Key'] = df_b_map['Dia_Num'].apply(lambda x: f"{x:04d}")
                 df_b_map['Eixo_X'] = df_b_map['Dia_Num'].apply(lambda x: f"Dia {x}")
             else:
-                df_b_map = pd.DataFrame(columns=['Eixo_X', 'LY', 'Dia_Num'])
+                df_b_map = pd.DataFrame(columns=['Eixo_X', 'LY', 'Dia_Num', 'Sort_Key'])
                 
             if not df_g_a.empty or not df_b_map.empty:
-                df_graf_comp = pd.merge(df_g_a[['Eixo_X', 'Atual', 'Dia_Num']], df_b_map[['Eixo_X', 'LY']], on='Eixo_X', how='outer').fillna(0)
-                if 'Dia_Num' in df_graf_comp.columns: df_graf_comp = df_graf_comp.sort_values('Dia_Num')
+                df_graf_comp = pd.merge(df_g_a[['Eixo_X', 'Atual', 'Sort_Key']], df_b_map[['Eixo_X', 'LY', 'Sort_Key']], on=['Eixo_X', 'Sort_Key'], how='outer').fillna(0)
+                df_graf_comp = df_graf_comp.sort_values('Sort_Key', ascending=True)
                 
                 df_graf_comp['Var_Perc'] = df_graf_comp.apply(lambda r: ((r['Atual'] / r['LY']) - 1) * 100 if r['LY'] > 0 else (100 if r['Atual'] > 0 else 0), axis=1)
                 df_graf_comp['Texto_Atual'] = df_graf_comp['Atual'].apply(formatar_moeda_br)
@@ -722,33 +755,34 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
                 
                 if len(df_graf_comp) <= 31:
                     for i, row in df_graf_comp.iterrows():
-                        # 🎯 BUGFIX CORRIGIDO COMPLETO: Corrigida a expressão para row['Eixo_X'] eliminando o '=' fujão
                         if row['LY'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['LY'], text=row['Texto_LY'], showarrow=False, yshift=-14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#F59E0B', borderpad=2.5, xanchor='center'))
                         if row['Atual'] > 0: lista_anotacoes_comp.append(dict(x=row['Eixo_X'], y=row['Atual'], text=row['Texto_Atual'], showarrow=False, yshift=14, font=dict(color='white', size=11, family='Inter', weight='bold'), bgcolor='#3B82F6', borderpad=2.5, xanchor='center'))
                 
                 fig_comp_dates.update_layout(plot_bgcolor='#0E1320', paper_bgcolor='#0E1320', font=dict(color='#94A3B8', size=11), yaxis=dict(title="", showgrid=False, showticklabels=False), margin=dict(l=15, r=15, t=15, b=40), hovermode='x unified', legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5, font=dict(color='#94A3B8', size=11)), annotations=lista_anotacoes_comp, height=420)
                 st.plotly_chart(fig_comp_dates, use_container_width=True, config={'displayModeBar': 'hover'})
         else:
-            df_g_a = pd.DataFrame(columns=['Eixo_X', 'Atual', 'Mes_Num'])
+            df_g_a = pd.DataFrame(columns=['Eixo_X', 'Atual', 'Mes_Num', 'Sort_Key'])
             if not df_per_a.empty:
-                df_t_a = df_per_a.copy().sort_values('Data')
+                df_t_a = df_per_a.copy()
                 df_t_a['Mes_Num'] = (df_t_a['Data'].dt.year - ini_a_ts.year) * 12 + df_t_a['Data'].dt.month - ini_a_ts.month + 1
                 df_g_a = df_t_a.groupby('Mes_Num')['Total'].sum().reset_index().rename(columns={'Total': 'Atual'})
+                df_g_a['Sort_Key'] = df_g_a['Mes_Num'].apply(lambda x: f"{x:04d}")
                 df_g_a['Eixo_X'] = df_g_a['Mes_Num'].apply(lambda x: f"Mês {x}")
                 
-            df_g_b = pd.DataFrame(columns=['Eixo_X', 'LY', 'Mes_Num'])
+            df_g_b = pd.DataFrame(columns=['Eixo_X', 'LY', 'Mes_Num', 'Sort_Key'])
             if not df_per_b.empty:
-                df_t_b = df_per_b.copy().sort_values('Data')
+                df_t_b = df_per_b.copy()
                 df_t_b['Mes_Num'] = (df_t_b['Data'].dt.year - ini_b_ts.year) * 12 + df_t_b['Data'].dt.month - ini_b_ts.month + 1
                 df_g_b = df_t_b.groupby('Mes_Num')['Total'].sum().reset_index().rename(columns={'Total': 'LY'})
                 df_b_map = df_g_b.copy()
+                df_b_map['Sort_Key'] = df_b_map['Mes_Num'].apply(lambda x: f"{x:04d}")
                 df_b_map['Eixo_X'] = df_b_map['Mes_Num'].apply(lambda x: f"Mês {x}")
             else:
-                df_b_map = pd.DataFrame(columns=['Eixo_X', 'LY', 'Mes_Num'])
+                df_b_map = pd.DataFrame(columns=['Eixo_X', 'LY', 'Mes_Num', 'Sort_Key'])
                 
             if not df_g_a.empty or not df_b_map.empty:
-                df_graf_comp = pd.merge(df_g_a[['Eixo_X', 'Atual', 'Mes_Num']], df_b_map[['Eixo_X', 'LY']], on='Eixo_X', how='outer').fillna(0)
-                if 'Mes_Num' in df_graf_comp.columns: df_graf_comp = df_graf_comp.sort_values('Mes_Num')
+                df_graf_comp = pd.merge(df_g_a[['Eixo_X', 'Atual', 'Sort_Key']], df_b_map[['Eixo_X', 'LY', 'Sort_Key']], on=['Eixo_X', 'Sort_Key'], how='outer').fillna(0)
+                df_graf_comp = df_graf_comp.sort_values('Sort_Key', ascending=True)
                 
                 df_graf_comp['Var_Perc'] = df_graf_comp.apply(lambda r: ((r['Atual'] / r['LY']) - 1) * 100 if r['LY'] > 0 else (100 if r['Atual'] > 0 else 0), axis=1)
                 df_graf_comp['Texto_Atual'] = df_graf_comp['Atual'].apply(formatar_moeda_br)
@@ -798,8 +832,8 @@ elif pagina_selecionada == "🔄 Comparação de Períodos":
                         linha_filha = sub_row.copy()
                         linha_filha[e_linhas_comp] = f"          {sub_row['Produto']}"
                         
-                        inline_index = linha_filha.index
-                        if 'Produto' in inline_index:
+                        local_index = linha_filha.index
+                        if 'Produto' in local_index:
                             linha_filha = linha_filha.drop('Produto')
                             
                         linhas_exibicao.append(linha_filha)
